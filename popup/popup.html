@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Voice Assistant</title>
+    <link rel="stylesheet" href="popup.css">
+    <script src="../utils/commands.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>🎤 AI Voice Assistant</h1>
+            <p class="subtitle">Accessible Voice-Controlled Web Browsing</p>
+        </header>
+
+        <!-- Voice Control Section -->
+        <section class="voice-section">
+            <div class="status-indicator" id="statusIndicator">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">Ready to listen</span>
+            </div>
+
+            <button id="listenBtn" class="primary-btn">
+                <span class="mic-icon">🎤</span>
+                <span id="listenBtnText">Start Listening</span>
+            </button>
+
+            <button id="openSettingsBtn" class="secondary-btn" style="display: none; width: 100%; margin-top: 8px;">
+                ⚙️ Open Chrome Settings
+            </button>
+
+            <div class="transcript-box" id="transcriptBox">
+                <p class="transcript-label">Your command:</p>
+                <p id="transcript" class="transcript-text">Say something...</p>
+            </div>
+
+            <div class="response-box" id="responseBox" style="display: none;">
+                <p class="response-label">Assistant response:</p>
+                <p id="response" class="response-text"></p>
+
+                <!-- Playback Controls -->
+                <div class="playback-controls" id="playbackControls">
+                    <button id="rewindBtn" title="Rewind (skip back 3 chunks)">
+                        ⏪ Rewind
+                    </button>
+                    <button id="stopReadingBtn" class="stop-btn" title="Stop reading">
+                        ⏹️ Stop
+                    </button>
+                    <button id="fastForwardBtn" title="Fast forward (skip ahead 3 chunks)">
+                        Forward ⏩
+                    </button>
+                </div>
+                <div class="progress-display" id="progressDisplay"></div>
+            </div>
+        </section>
+
+        <!-- Settings Section -->
+        <section class="settings-section">
+            <div class="setting-item">
+                <label>
+                    <input type="checkbox" id="enableTTS" checked />
+                    Enable voice feedback (TTS)
+                </label>
+            </div>
+
+            <div class="setting-item">
+                <label>
+                    <input type="checkbox" id="enableContinuousListening" />
+                    Continuous listening (auto-restart after each command)
+                </label>
+            </div>
+        </section>
+
+        <!-- Image Explainer Section -->
+        <section class="image-section">
+            <h2>🖼️ Image Explainer</h2>
+            <p class="section-description">Upload an image or take a screenshot to get AI-powered description and text
+                extraction</p>
+
+            <div class="image-upload-area" id="imageUploadArea">
+                <input type="file" id="imageInput" accept="image/*" style="display: none;" />
+                <button id="uploadImageBtn" class="secondary-btn">
+                    📷 Upload Image
+                </button>
+                <button id="captureScreenBtn" class="secondary-btn">
+                    📸 Capture Screen
+                </button>
+            </div>
+
+            <div id="imagePreview" class="image-preview" style="display: none;">
+                <img id="previewImg" alt="Preview" />
+                <button id="analyzeImageBtn" class="primary-btn">🔍 Analyze Image</button>
+            </div>
+
+            <div id="imageAnalysis" class="image-analysis" style="display: none;">
+                <h3>Analysis Results:</h3>
+                <div id="analysisContent"></div>
+            </div>
+        </section>
+
+        <!-- Command History -->
+        <section class="history-section">
+            <h2>📜 Recent Commands</h2>
+            <div id="commandHistory" class="history-list"></div>
+            <button id="clearHistory" class="secondary-btn">Clear History</button>
+        </section>
+
+        <!-- Quick Commands Reference -->
+        <section class="commands-section">
+            <h2>💡 Quick Commands</h2>
+            <div class="commands-grid">
+                <div class="command-item">"Scroll down"</div>
+                <div class="command-item">"Scroll up"</div>
+                <div class="command-item">"Go to top"</div>
+                <div class="command-item">"Click [button name]"</div>
+                <div class="command-item">"Go back"</div>
+                <div class="command-item">"Refresh page"</div>
+                <div class="command-item">"Read this page"</div>
+                <div class="command-item">"Open [website]"</div>
+                <div class="command-item">"Search for [query]"</div>
+            </div>
+        </section>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+
+</html>
