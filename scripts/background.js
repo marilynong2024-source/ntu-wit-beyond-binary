@@ -1,4 +1,4 @@
-importScripts('../utils/command.js');
+importScripts('../utils/commands.js');
 
 let ttsChunks = [];
 let ttsIndex = 0;
