@@ -316,7 +316,28 @@ function setupEventListeners() {
             loadCommandHistory();
         });
     });
+    const simplifyBtn = document.getElementById('simplifyPageBtn');
+    if (simplifyBtn) {
+        simplifyBtn.addEventListener('click', async () => {
+            try {
+                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                if (!tab || !tab.id) return;
 
+                chrome.tabs.sendMessage(tab.id, { type: 'executeAction', action: 'simplify_page' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        document.getElementById('response').textContent = '⚠️ Could not simplify page: ' + chrome.runtime.lastError.message;
+                        document.getElementById('responseBox').style.display = 'block';
+                        return;
+                    }
+                    document.getElementById('response').textContent = (response && response.message) || 'Page simplified';
+                    document.getElementById('responseBox').style.display = 'block';
+                });
+            } catch (err) {
+                document.getElementById('response').textContent = '⚠️ Error simplifying page: ' + (err.message || String(err));
+                document.getElementById('responseBox').style.display = 'block';
+            }
+        });
+    }
     const openSettingsBtn = document.getElementById('openSettingsBtn');
     if (openSettingsBtn) {
         openSettingsBtn.addEventListener('click', () => {

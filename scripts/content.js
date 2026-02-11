@@ -688,6 +688,9 @@ if (typeof window.contentScriptInitialized === 'undefined') {
             case 'decrease_target_size':
                 return decreaseTargetSize();
 
+            case 'simplify_page':
+                return simplifyPageContent();
+    
             default:
                 throw new Error(`Unknown action: ${action}`);
         }
@@ -1032,6 +1035,114 @@ if (typeof window.contentScriptInitialized === 'undefined') {
         };
     }
 
+    function simplifyPageContent() {
+        // Save original HTML before modifying
+        if (!window.__simplify_original_html) {
+            window.__simplify_original_html = document.body.innerHTML;
+        }
+
+        // Find main content
+        const mainContent = document.querySelector('main, article, [role="main"]') ||
+            document.querySelector('.content, .main-content, #content') ||
+            document.body;
+        
+        // Clone and clean the content
+        const clone = mainContent.cloneNode(true);
+        const scripts = clone.querySelectorAll('script, style, nav, header, footer, aside, .ad, .advertisement, iframe, embed, object, img');
+        scripts.forEach(el => el.remove());
+
+        // Create a clean container with reading-optimised styles
+        const container = document.createElement('div');
+        container.id = '__simplify_container';
+        container.style.maxWidth = '2000px';       // Narrower column improves readability
+        container.style.margin = '24px auto';
+        container.style.padding = '20px';
+        container.style.background = '#ffffff';
+        container.style.color = '#111111';
+        container.style.lineHeight = '1.5';        // 1.5 line spacing (leading)
+        container.style.fontSize = '18px';         // 18px ≈ 14pt, within 12–14pt+ range
+        container.style.letterSpacing = '0.05em';  // Increased tracking
+        container.style.wordSpacing = '0.1em';     // Slight word spacing boost
+        container.style.textAlign = 'left';        // Left-aligned, ragged right — no justify
+        container.appendChild(clone);
+
+        // Clear the page and insert simplified view
+        document.body.innerHTML = '';
+        document.body.appendChild(container);
+
+        // Stylesheet: typography, links, headings, lists, paragraphs
+        const style = document.createElement('style');
+        style.id = '__simplify_style';
+        style.textContent = `
+            body {
+                background: #fff !important;
+                color: #111 !important;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            }
+            #__simplify_container * {
+                text-align: left !important;       /* Override any centred or justified text */
+                font-style: normal !important;     /* Remove italics site-wide */
+                text-decoration: none !important;  /* Remove underlines site-wide (re-added for links below) */
+            }
+            #__simplify_container a {
+                color: #1a73e8 !important;
+                text-decoration: underline !important;
+            }
+            #__simplify_container h1,
+            #__simplify_container h2,
+            #__simplify_container h3,
+            #__simplify_container h4 {
+                line-height: 1.4;
+                letter-spacing: 0.04em;
+                margin-top: 1.4em;
+                margin-bottom: 0.5em;
+            }
+            #__simplify_container p {
+                margin-bottom: 1em;
+                max-width: 70ch;    /* ~70 characters per line — optimal reading width */
+            }
+            #__simplify_container ul,
+            #__simplify_container ol {
+                padding-left: 1.5em;
+                margin-bottom: 1em;
+            }
+            #__simplify_container li {
+                margin-bottom: 0.5em;   /* Space between list items */
+                line-height: 1.5;
+            }
+            #__simplify_container strong, 
+            #__simplify_container b {
+                font-weight: 700;       /* Ensure bold is visually distinct */
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Add a restore button fixed to the top-right
+        const restoreBtn = document.createElement('button');
+        restoreBtn.textContent = 'Restore page';
+        restoreBtn.style.position = 'fixed';
+        restoreBtn.style.top = '12px';
+        restoreBtn.style.right = '12px';
+        restoreBtn.style.zIndex = '999999';
+        restoreBtn.style.padding = '8px 12px';
+        restoreBtn.style.fontSize = '14px';
+        restoreBtn.style.cursor = 'pointer';
+        restoreBtn.style.background = '#1a73e8';
+        restoreBtn.style.color = 'white';
+        restoreBtn.style.border = 'none';
+        restoreBtn.style.borderRadius = '4px';
+        restoreBtn.addEventListener('click', () => {
+            if (window.__simplify_original_html) {
+                document.body.innerHTML = window.__simplify_original_html;
+                window.__simplify_original_html = null;
+                const previousStyle = document.getElementById('__simplify_style');
+                if (previousStyle && previousStyle.parentNode) previousStyle.parentNode.removeChild(previousStyle);
+            }
+        });
+        document.body.appendChild(restoreBtn);
+
+        return { message: 'Page simplified for easier reading' };
+    }
     function speakInPage(text) {
         console.log('[CONTENT] speakInPage called with text length:', text ? text.length : 0);
         
