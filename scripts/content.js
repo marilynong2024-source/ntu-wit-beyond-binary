@@ -143,8 +143,28 @@ if (typeof window.contentScriptInitialized === 'undefined') {
         }
     }, true); // Use capture phase to catch before other handlers
 
+    function stopContentSpeechRecognition() {
+        if (window.contentRecognitionAutoStopTimer) {
+            clearTimeout(window.contentRecognitionAutoStopTimer);
+            window.contentRecognitionAutoStopTimer = null;
+        }
+
+        if (!window.contentRecognition) return;
+        try {
+            window.contentRecognition.stop();
+        } catch (e) {
+            // Ignore stop errors if recognition already ended
+        }
+    }
+
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.log('[CONTENT DEBUG] Message received:', request.type, request.action ?? '', request.params ?? '');
+        if (request.type === 'stopSpeechRecognition') {
+            stopContentSpeechRecognition();
+            sendResponse({ success: true });
+            return true;
+        }
+
         // Handle startSpeechRecognition synchronously to avoid channel closing
         if (request.type === 'startSpeechRecognition') {
             try {
@@ -570,27 +590,11 @@ if (typeof window.contentScriptInitialized === 'undefined') {
             }
         };
 
-        const stopRecognitionSafely = () => {
-            if (!window.contentRecognition) return;
-            try {
-                window.contentRecognition.stop();
-            } catch (e) {
-                // Ignore stop errors (can happen if recognition already ended)
-            }
-        };
-        
         if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             
             // Stop any existing recognition first
-            clearRecognitionAutoStopTimer();
-            if (window.contentRecognition) {
-                try {
-                    window.contentRecognition.stop();
-                } catch (e) {
-                    // Ignore errors when stopping
-                }
-            }
+            stopContentSpeechRecognition();
             
             window.contentRecognition = new SpeechRecognition();
             window.contentRecognition.continuous = false;
@@ -607,15 +611,14 @@ if (typeof window.contentScriptInitialized === 'undefined') {
                 clearRecognitionAutoStopTimer();
                 window.contentRecognitionAutoStopTimer = setTimeout(() => {
                     console.log('[CONTENT] Auto-stopping speech recognition after timeout');
-                    stopRecognitionSafely();
+                    stopContentSpeechRecognition();
                 }, MAX_LISTENING_MS);
             };
 
             window.contentRecognition.onresult = (event) => {
                 const transcript = event.results[0][0].transcript;
                 console.log('[CONTENT DEBUG] Speech result transcript:', transcript);
-                clearRecognitionAutoStopTimer();
-                stopRecognitionSafely();
+                stopContentSpeechRecognition();
                 processCommandLocally(transcript);
                 chrome.runtime.sendMessage({
                     type: 'speechRecognitionResult',
@@ -1030,12 +1033,7 @@ if (typeof window.contentScriptInitialized === 'undefined') {
             window.location.reload();
         }
         else {
-            console.log('[CONTENT DEBUG] processCommandLocally: forwarding to background (speechRecognitionResult)');
-            // For complex commands, try background script
-            chrome.runtime.sendMessage({
-                type: 'speechRecognitionResult',
-                transcript: transcript
-            }).catch(() => {});
+            console.log('[CONTENT DEBUG] processCommandLocally: no local-only shortcut matched');
         }
     }
 
