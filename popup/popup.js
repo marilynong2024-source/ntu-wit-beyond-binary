@@ -6,12 +6,14 @@ let synth = window.speechSynthesis;
 let lastReadPageTabId = null;
 
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('[POPUP] DOMContentLoaded - setting up listeners');
     initializeSpeechRecognition();
     loadSettings();
     loadCommandHistory();
     setupEventListeners();
     checkMicrophonePermission();
     setupMessageListener();
+    console.log('[POPUP] Message listener setup complete');
 
     chrome.storage.local.get(['enableContinuousListening'], (result) => {
         if (result.enableContinuousListening) {
@@ -26,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function setupMessageListener() {
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        console.log('[POPUP DEBUG] Message received:', message.type, message);
         if (message.type === 'speechRecognitionResult') {
             handleSpeechResult(message.transcript);
         } else if (message.type === 'speechRecognitionError') {
@@ -365,6 +368,58 @@ function setupEventListeners() {
             }).catch(() => { });
         });
     }
+    // MOTOR IMPAIRMENTS - ZOOM IN/OUT
+
+    document.getElementById('increaseTargetsBtn').addEventListener('click', async () => {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab?.id) return;
+
+        try {
+            const result = await chrome.tabs.sendMessage(tab.id, {
+                type: 'executeAction',
+                action: 'increase_target_size'
+            });
+
+            document.getElementById('response').textContent = result.message || 'Size increased';
+            document.getElementById('responseBox').style.display = 'block';
+        } catch (e) {
+            alert('Please refresh the page and try again');
+        }
+    });
+
+    // document.getElementById('decreaseTargetsBtn').addEventListener('click', async () => {
+    //     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    //     if (!tab?.id) return;
+
+    //     try {
+    //         const result = await chrome.tabs.sendMessage(tab.id, {
+    //             type: 'executeAction',
+    //             action: 'decrease_target_size'
+    //         });
+
+    //         document.getElementById('response').textContent = result.message || 'Size decreased';
+    //         document.getElementById('responseBox').style.display = 'block';
+    //     } catch (e) {
+    //         alert('Please refresh the page and try again');
+    //     }
+    // });
+
+    document.getElementById('decreaseTargetsBtn').addEventListener('click', async () => {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab?.id) return;
+    
+        try {
+            const result = await chrome.tabs.sendMessage(tab.id, {
+                type: 'executeAction',
+                action: 'decrease_target_size'
+            });
+            
+            document.getElementById('response').textContent = result.message || 'Size decreased';
+            document.getElementById('responseBox').style.display = 'block';
+        } catch (e) {
+            alert('Please refresh the page and try again');
+        }
+    });
 }
 
 function updateStatus(state, text) {

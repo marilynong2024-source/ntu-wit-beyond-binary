@@ -252,6 +252,9 @@ function fallbackParse(text) {
             return { action: "SEARCH", query: searchMatch[1].trim() };
         }
     }
+    if (t.includes("larger") && (t.includes("target") || t.includes("button"))) {
+        return { action: "ENLARGE_TARGETS" };
+    }
     const openMatch = t.match(/open\s+(.+)/);
     if (openMatch && openMatch[1]) {
         let url = openMatch[1].trim();
@@ -265,9 +268,21 @@ function fallbackParse(text) {
 }
 
 // Expose for importScripts (no ES modules in service worker)
-self.COMMAND_SCHEMA = COMMAND_SCHEMA;
-self.SYSTEM_PROMPT = SYSTEM_PROMPT;
-self.buildAIRequest = buildAIRequest;
-self.parseAIResponse = parseAIResponse;
-self.mapParsedToInternal = mapParsedToInternal;
-self.fallbackParse = fallbackParse;
+if (typeof self !== 'undefined') {
+    self.COMMAND_SCHEMA = COMMAND_SCHEMA;
+    self.SYSTEM_PROMPT = SYSTEM_PROMPT;
+    self.buildAIRequest = buildAIRequest;
+    self.parseAIResponse = parseAIResponse;
+    self.mapParsedToInternal = mapParsedToInternal;
+    self.fallbackParse = fallbackParse;
+}
+
+// Also expose for regular browser context (popup.js)
+if (typeof window !== 'undefined') {
+    window.COMMAND_SCHEMA = COMMAND_SCHEMA;
+    window.SYSTEM_PROMPT = SYSTEM_PROMPT;
+    window.buildAIRequest = buildAIRequest;
+    window.parseAIResponse = parseAIResponse;
+    window.mapParsedToInternal = mapParsedToInternal;
+    window.fallbackParse = fallbackParse;
+}
