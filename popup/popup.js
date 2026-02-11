@@ -3,6 +3,7 @@ let isListening = false;
 let isReading = false;
 let synth = window.speechSynthesis;
 let lastReadPageTabId = null;
+const VOICE_PANEL_KEYS = ['lastVoiceCommand', 'lastAssistantResponse', 'lastVoiceProcessing'];
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log('[POPUP] DOMContentLoaded - setting up listeners');
@@ -11,6 +12,8 @@ document.addEventListener('DOMContentLoaded', () => {
     loadCommandHistory();
     setupEventListeners();
     checkMicrophonePermission();
+    loadLatestVoicePanels();
+    setupVoiceStateListener();
     setupMessageListener();
     console.log('[POPUP] Message listener setup complete');
 
@@ -29,7 +32,10 @@ function setupMessageListener() {
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log('[POPUP DEBUG] Message received:', message.type, message);
         if (message.type === 'speechRecognitionResult') {
-            handleSpeechResult(message.transcript);
+            handleSpeechResult(message.transcript, {
+                handledLocally: Boolean(message.handledLocally),
+                localMessage: message.localMessage
+            });
         } else if (message.type === 'speechRecognitionError') {
             handleSpeechError(message.error);
         } else if (message.type === 'readPageStarted') {
@@ -61,6 +67,7 @@ function setupMessageListener() {
                 '3. Set a System voice (e.g., Samantha)\n' +
                 '4. Test: Select text and press Option+Esc';
             document.getElementById('responseBox').style.display = 'block';
+            persistVoicePanels(null, document.getElementById('response').textContent, false);
         } else if (message.type === 'speechRecognitionStatus') {
             if (message.status === 'listening') {
                 isListening = true;
@@ -390,6 +397,61 @@ function loadSettings() {
     });
 }
 
+function applyVoicePanelState(state = {}) {
+    const command = state.lastVoiceCommand;
+    const response = state.lastAssistantResponse;
+    const isProcessing = Boolean(state.lastVoiceProcessing);
+
+    if (typeof command === 'string' && command.trim()) {
+        document.getElementById('transcript').textContent = command;
+        document.getElementById('transcriptBox').style.display = 'block';
+    }
+
+    if (typeof response === 'string' && response.trim()) {
+        document.getElementById('response').textContent = response;
+        document.getElementById('responseBox').style.display = 'block';
+        return;
+    }
+
+    if (isProcessing) {
+        document.getElementById('response').textContent = 'Processing command...';
+        document.getElementById('responseBox').style.display = 'block';
+    }
+}
+
+function loadLatestVoicePanels() {
+    chrome.storage.local.get(VOICE_PANEL_KEYS, (result) => {
+        applyVoicePanelState(result);
+    });
+}
+
+function setupVoiceStateListener() {
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+        if (areaName !== 'local') return;
+        const hasVoiceUpdate = VOICE_PANEL_KEYS.some((key) => Object.prototype.hasOwnProperty.call(changes, key));
+        if (!hasVoiceUpdate) return;
+        loadLatestVoicePanels();
+    });
+}
+
+function persistVoicePanels(command, response, isProcessing) {
+    const payload = {
+        lastVoiceUpdatedAt: new Date().toISOString()
+    };
+
+    if (typeof command === 'string' && command.trim()) {
+        payload.lastVoiceCommand = command;
+    }
+    if (typeof response === 'string') {
+        payload.lastAssistantResponse = response;
+    }
+    if (typeof isProcessing === 'boolean') {
+        payload.lastVoiceProcessing = isProcessing;
+    }
+
+    chrome.storage.local.set(payload, () => { });
+}
+
 function saveCommandToHistory(command, response) {
     chrome.storage.local.get(['commandHistory'], (result) => {
         const history = result.commandHistory || [];
@@ -565,13 +627,21 @@ async function tryContentScriptRecognition() {
     }
 }
 
-function handleSpeechResult(transcript) {
+function handleSpeechResult(transcript, options = {}) {
     console.log('[POPUP DEBUG] handleSpeechResult, transcript:', transcript);
+    const handledLocally = Boolean(options.handledLocally);
+    const localMessage = typeof options.localMessage === 'string' ? options.localMessage : '';
+
     document.getElementById('transcript').textContent = transcript;
     document.getElementById('transcriptBox').style.display = 'block';
-    document.getElementById('response').textContent = transcript + '\n\nProcessing...';
+
+    const initialResponse = handledLocally
+        ? (localMessage || 'Done.')
+        : 'Processing command...';
+    document.getElementById('response').textContent = initialResponse;
     document.getElementById('responseBox').style.display = 'block';
     updateStatus('processing', 'Processing command...');
+    persistVoicePanels(transcript, initialResponse, !handledLocally);
 
     function finishListening() {
         updateStatus('ready', 'Ready to listen');
@@ -591,7 +661,15 @@ function handleSpeechResult(transcript) {
     }
 
     function applyExecutionResponse(response) {
-        if (!response) return;
+        if (!response) {
+            const noResponseText = 'Command was received, but no response was returned.';
+            document.getElementById('response').textContent = noResponseText;
+            document.getElementById('responseBox').style.display = 'block';
+            persistVoicePanels(transcript, noResponseText, false);
+            saveCommandToHistory(transcript, noResponseText);
+            return;
+        }
+
         let responseText = response.message || (response.error && String(response.error)) || 'Done.';
         if (response.description) {
             responseText = responseText + '\n\n' + response.description;
@@ -601,6 +679,7 @@ function handleSpeechResult(transcript) {
         } else {
             document.getElementById('response').textContent = responseText;
         }
+
         const stopReadingBtn = document.getElementById('stopReadingBtn');
         if (response.content && response.action === 'read_page') {
             lastReadPageTabId = response.tabId || null;
@@ -612,7 +691,20 @@ function handleSpeechResult(transcript) {
                 else speak(responseText);
             }
         }
+
+        persistVoicePanels(transcript, responseText, false);
         saveCommandToHistory(transcript, responseText);
+    }
+
+    if (handledLocally) {
+        finishListening();
+        const finalLocalMessage = localMessage || 'Done.';
+        persistVoicePanels(transcript, finalLocalMessage, false);
+        saveCommandToHistory(transcript, finalLocalMessage);
+        if (document.getElementById('enableTTS').checked) {
+            speak(finalLocalMessage);
+        }
+        return;
     }
 
     const fallback = typeof fallbackParse === 'function' ? fallbackParse(transcript) : { action: 'UNKNOWN' };
@@ -662,6 +754,7 @@ function handleSpeechError(error) {
     } else {
         document.getElementById('response').textContent = `Error: ${error}. Please try again.`;
         document.getElementById('responseBox').style.display = 'block';
+        persistVoicePanels(null, document.getElementById('response').textContent, false);
     }
 }
 
@@ -689,6 +782,7 @@ function showPermissionInstructions(error = null) {
 
     document.getElementById('response').textContent = instructions;
     document.getElementById('responseBox').style.display = 'block';
+    persistVoicePanels(null, instructions, false);
 
     const settingsBtn = document.getElementById('openSettingsBtn');
     if (settingsBtn) {
