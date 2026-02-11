@@ -78,21 +78,24 @@ if (typeof window.contentScriptInitialized === 'undefined') {
                         }
                     };
                     u.onerror = (e) => {
-                        console.error('[CONTENT] Error speaking first chunk:', e.error);
-                        if (e.error === 'not-allowed') {
-                            console.error('[CONTENT] Speech synthesis blocked: not-allowed');
-                            console.error('[CONTENT] This should not happen with keyboard shortcuts.');
-                            console.error('[CONTENT] Please ensure the browser tab has focus and try again.');
-                            window.isReadingPage = false;
-                            chrome.runtime.sendMessage({
-                                type: 'readPageError',
-                                error: 'Speech synthesis blocked. Please ensure the browser tab has focus and try again.'
-                            }).catch(() => {});
-                            return;
-                        }
-                        if (e.error !== 'canceled' && window.isReadingPage) {
-                            window.currentChunkIndex = 1;
-                            speakFromCurrentChunk();
+                        // 'canceled' and 'interrupted' are not real errors - they mean we stopped it intentionally
+                        if (e.error !== 'canceled' && e.error !== 'interrupted') {
+                            console.error('[CONTENT] Error speaking first chunk:', e.error);
+                            if (e.error === 'not-allowed') {
+                                console.error('[CONTENT] Speech synthesis blocked: not-allowed');
+                                console.error('[CONTENT] This should not happen with keyboard shortcuts.');
+                                console.error('[CONTENT] Please ensure the browser tab has focus and try again.');
+                                window.isReadingPage = false;
+                                chrome.runtime.sendMessage({
+                                    type: 'readPageError',
+                                    error: 'Speech synthesis blocked. Please ensure the browser tab has focus and try again.'
+                                }).catch(() => {});
+                                return;
+                            }
+                            if (window.isReadingPage) {
+                                window.currentChunkIndex = 1;
+                                speakFromCurrentChunk();
+                            }
                         }
                     };
                     
@@ -450,8 +453,8 @@ if (typeof window.contentScriptInitialized === 'undefined') {
 
             u.onerror = (e) => {
                 console.log('[CONTENT] Chunk', speakingIndex + 1, 'error:', e.error);
-                // 'canceled' is not a real error - it just means we canceled it intentionally
-                if (e.error !== 'canceled') {
+                // 'canceled' and 'interrupted' are not real errors - they mean we stopped it intentionally
+                if (e.error !== 'canceled' && e.error !== 'interrupted') {
                     console.error('[CONTENT] Error speaking chunk', speakingIndex + 1, ':', e.error);
                     
                     // Handle 'not-allowed' error - Chrome blocks speech synthesis without user interaction
@@ -481,7 +484,8 @@ if (typeof window.contentScriptInitialized === 'undefined') {
                     return;
                 }
                 // Only continue if this is still the current chunk (hasn't been skipped)
-                if (window.currentChunkIndex === speakingIndex && !chunkFinished) {
+                // Skip 'interrupted' errors - they're expected when user controls playback
+                if (e.error !== 'interrupted' && window.currentChunkIndex === speakingIndex && !chunkFinished) {
                     window.currentChunkIndex++;
                     speakNext();
                 }

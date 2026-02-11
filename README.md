@@ -120,7 +120,7 @@ Image analysis goes through the proxy; ensure it’s running and `GEMINI_API_KEY
 │   ├── background.js       # Service worker: EXECUTE_COMMAND, AI_PARSE, read_page TTS, keyboard commands
 │   └── content.js          # Injected script: speech recognition, scroll, click, read page text, etc.
 ├── utils/
-│   └── command.js          # mapParsedToInternal, fallbackParse (used by background)
+│   └── commands.js         # mapParsedToInternal, fallbackParse (used by background)
 ├── icons/
 │   └── icon16.png, icon48.png, icon128.png
 └── ai-proxy/               # Local Node server (Gemini)

@@ -1,4 +1,4 @@
-importScripts('../utils/command.js');
+importScripts('../utils/commands.js');
 
 let ttsChunks = [];
 let ttsIndex = 0;
@@ -10,13 +10,14 @@ function chunkText(text, size = 800) {
 }
 
 function speakChunkAt(i) {
+  // Check state at the very start - if stopped, don't continue
   if (!ttsIsReading || i < 0 || i >= ttsChunks.length) {
-    // Reading finished
+    // Reading finished naturally (reached end)
     const wasReading = ttsIsReading;
     ttsIsReading = false;
     ttsIsPaused = false;
     if (wasReading) {
-      // Notify that reading ended
+      // Notify that reading ended naturally
       chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
         if (tab?.id) {
           chrome.tabs.sendMessage(tab.id, { type: 'readPageEnded' }).catch(() => {});
@@ -35,12 +36,24 @@ function speakChunkAt(i) {
     pitch: 1,
     volume: 1,
     onEvent: (e) => {
+      // Double-check state before continuing - prevents continuation after stop
+      if (!ttsIsReading) {
+        console.log('[BACKGROUND TTS] Ignoring event - reading stopped');
+        return;
+      }
+      
       if (e.type === 'end') {
-        if (ttsIsReading && !ttsIsPaused) speakChunkAt(ttsIndex + 1);
+        // Only continue if still reading and not paused
+        if (ttsIsReading && !ttsIsPaused) {
+          speakChunkAt(ttsIndex + 1);
+        }
       }
       if (e.type === 'error') {
         console.error('[BACKGROUND TTS] error:', e.errorMessage);
-        if (ttsIsReading && !ttsIsPaused) speakChunkAt(ttsIndex + 1);
+        // Only continue on error if still reading and not paused
+        if (ttsIsReading && !ttsIsPaused) {
+          speakChunkAt(ttsIndex + 1);
+        }
       }
     }
   });
@@ -56,11 +69,14 @@ function startTtsReading(text) {
 
 function stopTtsReading() {
   const wasReading = ttsIsReading;
+  // Set flag FIRST to prevent any queued events from continuing
   ttsIsReading = false;
   ttsIsPaused = false;
+  // Stop TTS immediately
+  chrome.tts.stop();
+  // Clear state
   ttsChunks = [];
   ttsIndex = 0;
-  chrome.tts.stop();
   console.log('[BACKGROUND TTS] Stopped reading');
   // Notify that reading ended
   if (wasReading) {
@@ -91,6 +107,10 @@ function ffTts() {
   // Skip ahead 3 chunks (as UI indicates)
   const newIndex = Math.min(ttsIndex + 3, ttsChunks.length - 1);
   console.log('[BACKGROUND TTS] Fast forward from chunk', ttsIndex, 'to', newIndex);
+  // Resume if paused (fast forward implies resuming)
+  if (ttsIsPaused) {
+    ttsIsPaused = false;
+  }
   speakChunkAt(newIndex);
 }
 
@@ -99,6 +119,10 @@ function rwTts() {
   // Skip back 3 chunks (as UI indicates)
   const newIndex = Math.max(ttsIndex - 3, 0);
   console.log('[BACKGROUND TTS] Rewind from chunk', ttsIndex, 'to', newIndex);
+  // Resume if paused (rewind implies resuming)
+  if (ttsIsPaused) {
+    ttsIsPaused = false;
+  }
   speakChunkAt(newIndex);
 }
 

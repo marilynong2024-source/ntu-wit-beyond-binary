@@ -46,6 +46,7 @@ function setupMessageListener() {
             document.getElementById('playbackControls').classList.add('active');
             document.getElementById('progressDisplay').classList.add('active');
         } else if (message.type === 'readPageEnded') {
+            // Only hide controls if reading actually ended (not just paused)
             isReading = false;
             isPaused = false;
             document.getElementById('stopReadingBtn').style.display = 'none';
@@ -271,6 +272,8 @@ function setupEventListeners() {
                             isPaused = false;
                             pauseResumeBtn.textContent = '⏸️ Pause';
                             pauseResumeBtn.title = 'Pause reading';
+                            // Ensure controls stay visible
+                            document.getElementById('playbackControls').classList.add('active');
                         }
                     });
                 } else {
@@ -282,6 +285,8 @@ function setupEventListeners() {
                             isPaused = true;
                             pauseResumeBtn.textContent = '▶️ Resume';
                             pauseResumeBtn.title = 'Resume reading';
+                            // Ensure controls stay visible
+                            document.getElementById('playbackControls').classList.add('active');
                         }
                     });
                 }
@@ -314,6 +319,17 @@ function setupEventListeners() {
                 chrome.runtime.sendMessage({ type: 'FAST_FORWARD' }, (response) => {
                     if (chrome.runtime.lastError) {
                         console.error('[POPUP] Fast forward error:', chrome.runtime.lastError);
+                    } else {
+                        // Update pause state if it was paused (fast forward resumes)
+                        if (isPaused) {
+                            isPaused = false;
+                            if (pauseResumeBtn) {
+                                pauseResumeBtn.textContent = '⏸️ Pause';
+                                pauseResumeBtn.title = 'Pause reading';
+                            }
+                        }
+                        // Ensure controls stay visible
+                        document.getElementById('playbackControls').classList.add('active');
                     }
                 });
             }
@@ -328,6 +344,17 @@ function setupEventListeners() {
                 chrome.runtime.sendMessage({ type: 'REWIND' }, (response) => {
                     if (chrome.runtime.lastError) {
                         console.error('[POPUP] Rewind error:', chrome.runtime.lastError);
+                    } else {
+                        // Update pause state if it was paused (rewind resumes)
+                        if (isPaused) {
+                            isPaused = false;
+                            if (pauseResumeBtn) {
+                                pauseResumeBtn.textContent = '⏸️ Pause';
+                                pauseResumeBtn.title = 'Pause reading';
+                            }
+                        }
+                        // Ensure controls stay visible
+                        document.getElementById('playbackControls').classList.add('active');
                     }
                 });
             }
