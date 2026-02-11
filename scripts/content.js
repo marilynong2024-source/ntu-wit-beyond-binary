@@ -315,6 +315,15 @@ if (typeof window.contentScriptInitialized === 'undefined') {
                 }
                 throw new Error('No URL provided');
 
+            case 'enlarge_click_targets':
+                return enlargeClickTargets();
+
+            case 'increase_target_size':
+                return increaseTargetSize();
+
+            case 'decrease_target_size':
+                return decreaseTargetSize();
+
             default:
                 throw new Error(`Unknown action: ${action}`);
         }
@@ -750,5 +759,130 @@ if (typeof window.contentScriptInitialized === 'undefined') {
 
         throw new Error('Could not find search input on this page');
     }
+
+    // ==========================================
+    // MOTOR IMPAIRMENT FEATURES
+    // ==========================================
+
+    // Larger click targets
+    // Initialize zoom level (1.0 = original size, can't go below this)
+    if (typeof window.targetSizeLevel === 'undefined') {
+        window.targetSizeLevel = 1.0;
+    }
+
+    function increaseTargetSize() {
+        // Increase by 0.2 (20%) each time, max 2.0 (200%)
+        window.targetSizeLevel = Math.min(window.targetSizeLevel + 0.2, 2.0);
+        applyTargetSizeStyle();
+
+        const percentage = Math.round(window.targetSizeLevel * 100);
+        return { message: `Size increased to ${percentage}%` };
+    }
+
+    // function decreaseTargetSize() {
+    //     // Decrease by 0.2 (20%) each time, minimum 1.0 (100% - original)
+    //     window.targetSizeLevel = Math.max(window.targetSizeLevel - 0.2, 1.0);
+    //     applyTargetSizeStyle();
+
+    //     const percentage = Math.round(window.targetSizeLevel * 100);
+    //     if (window.targetSizeLevel === 1.0) {
+    //         return { message: 'Reset to original size (100%)' };
+    //     }
+    //     return { message: `Size decreased to ${percentage}%` };
+    // }
+
+    function decreaseTargetSize() {
+        // Check if already at minimum before decreasing
+        const wasAtMinimum = window.targetSizeLevel === 1.0;
+        
+        // Decrease by 0.2 (20%) each time, minimum 1.0 (100% - original)
+        window.targetSizeLevel = Math.max(window.targetSizeLevel - 0.2, 1.0);
+        applyTargetSizeStyle();
+        
+        const percentage = Math.round(window.targetSizeLevel * 100);
+        
+        // Show warning if trying to go below minimum
+        if (wasAtMinimum) {
+            showNotification('⚠️ This is the minimum size (original 100%). Cannot decrease further.');
+            return { message: 'Already at minimum size (100%)', atMinimum: true };
+        }
+        
+        if (window.targetSizeLevel === 1.0) {
+            return { message: 'Reset to original size (100%)', atMinimum: true };
+        }
+        return { message: `Size decreased to ${percentage}%`, atMinimum: false };
+    }
+    
+    function showNotification(message) {
+        // Remove any existing notification
+        const existing = document.getElementById('accessibility-notification');
+        if (existing) {
+            existing.remove();
+        }
+        
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.id = 'accessibility-notification';
+        notification.className = 'notification-popup';
+        notification.textContent = message;
+        
+        document.body.appendChild(notification);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            notification.classList.add('fade-out');
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 500); // Wait for fade-out animation
+        }, 5000);
+    }
+
+    function applyTargetSizeStyle() {
+        // Remove existing style if present
+        const existingStyle = document.getElementById('target-size-style');
+        if (existingStyle) {
+            existingStyle.remove();
+        }
+
+        // Don't add style if at original size (1.0)
+        if (window.targetSizeLevel === 1.0) {
+            return;
+        }
+
+        const style = document.createElement('style');
+        style.id = 'target-size-style';
+
+        const baseFontSize = 16 * window.targetSizeLevel;
+        const minWidth = 48 * window.targetSizeLevel;
+        const minHeight = 48 * window.targetSizeLevel;
+        const padding = 12 * window.targetSizeLevel;
+
+        style.textContent = `
+        /* Enlarge clickable elements */
+        button, a, input[type="button"], input[type="submit"], [role="button"] {
+            min-width: ${minWidth}px !important;
+            min-height: ${minHeight}px !important;
+            padding: ${padding}px !important;
+            font-size: ${baseFontSize}px !important;
+            line-height: 1.5 !important;
+        }
+        
+        /* Also enlarge general text for readability */
+        body, p, li, div, span {
+            font-size: ${baseFontSize}px !important;
+            line-height: 1.6 !important;
+        }
+        
+        /* Headings */
+        h1 { font-size: ${baseFontSize * 2}px !important; }
+        h2 { font-size: ${baseFontSize * 1.75}px !important; }
+        h3 { font-size: ${baseFontSize * 1.5}px !important; }
+    `;
+
+        document.head.appendChild(style);
+    }
+
 
 }

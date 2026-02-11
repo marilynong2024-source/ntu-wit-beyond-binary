@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "AI Voice Assistant - Accessibility Extension",
-  "version": "1.0.0",
+  "name": "Accessibility Extension",
+  "version": "1.0.1",
   "description": "AI-powered voice-controlled interface for accessible web browsing with image explanation capabilities",
   "permissions": [
     "activeTab",
@@ -23,6 +23,7 @@
     {
       "matches": ["<all_urls>"],
       "js": ["scripts/content.js"],
+      "css": ["scripts/content.css"],
       "run_at": "document_idle"
     }
   ],
