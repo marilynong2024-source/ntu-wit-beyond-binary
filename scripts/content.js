@@ -2,6 +2,7 @@ if (typeof window.contentScriptInitialized === 'undefined') {
     window.contentScriptInitialized = true;
 
     window.contentRecognition = null;
+    window.contentRecognitionAutoStopTimer = null;
     window.isReadingPage = false;
     window.speechChunks = [];
     window.currentChunkIndex = 0;
@@ -560,11 +561,29 @@ if (typeof window.contentScriptInitialized === 'undefined') {
         console.log('[CONTENT DEBUG] startContentSpeechRecognition called');
         // Return null to indicate async handling (response sent via chrome.runtime.sendMessage)
         // The caller will send an immediate response
+        const MAX_LISTENING_MS = 10000;
+
+        const clearRecognitionAutoStopTimer = () => {
+            if (window.contentRecognitionAutoStopTimer) {
+                clearTimeout(window.contentRecognitionAutoStopTimer);
+                window.contentRecognitionAutoStopTimer = null;
+            }
+        };
+
+        const stopRecognitionSafely = () => {
+            if (!window.contentRecognition) return;
+            try {
+                window.contentRecognition.stop();
+            } catch (e) {
+                // Ignore stop errors (can happen if recognition already ended)
+            }
+        };
         
         if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             
             // Stop any existing recognition first
+            clearRecognitionAutoStopTimer();
             if (window.contentRecognition) {
                 try {
                     window.contentRecognition.stop();
@@ -583,11 +602,20 @@ if (typeof window.contentScriptInitialized === 'undefined') {
                     type: 'speechRecognitionStatus',
                     status: 'listening'
                 }).catch(() => {});
+
+                // One-shot guard: force stop if recognition hangs without ending.
+                clearRecognitionAutoStopTimer();
+                window.contentRecognitionAutoStopTimer = setTimeout(() => {
+                    console.log('[CONTENT] Auto-stopping speech recognition after timeout');
+                    stopRecognitionSafely();
+                }, MAX_LISTENING_MS);
             };
 
             window.contentRecognition.onresult = (event) => {
                 const transcript = event.results[0][0].transcript;
                 console.log('[CONTENT DEBUG] Speech result transcript:', transcript);
+                clearRecognitionAutoStopTimer();
+                stopRecognitionSafely();
                 processCommandLocally(transcript);
                 chrome.runtime.sendMessage({
                     type: 'speechRecognitionResult',
@@ -597,6 +625,7 @@ if (typeof window.contentScriptInitialized === 'undefined') {
 
             window.contentRecognition.onerror = (event) => {
                 console.error('[CONTENT] Speech recognition error:', event.error);
+                clearRecognitionAutoStopTimer();
                 chrome.runtime.sendMessage({
                     type: 'speechRecognitionError',
                     error: event.error
@@ -604,6 +633,7 @@ if (typeof window.contentScriptInitialized === 'undefined') {
             };
 
             window.contentRecognition.onend = () => {
+                clearRecognitionAutoStopTimer();
                 chrome.runtime.sendMessage({
                     type: 'speechRecognitionStatus',
                     status: 'ended'
