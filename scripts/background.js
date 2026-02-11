@@ -3,6 +3,7 @@ importScripts('../utils/command.js');
 let ttsChunks = [];
 let ttsIndex = 0;
 let ttsIsReading = false;
+let ttsIsPaused = false;
 
 function chunkText(text, size = 800) {
   return (text || '').trim().match(new RegExp(`.{1,${size}}(\\s|$)`, 'g')) || [];
@@ -10,7 +11,18 @@ function chunkText(text, size = 800) {
 
 function speakChunkAt(i) {
   if (!ttsIsReading || i < 0 || i >= ttsChunks.length) {
+    // Reading finished
+    const wasReading = ttsIsReading;
     ttsIsReading = false;
+    ttsIsPaused = false;
+    if (wasReading) {
+      // Notify that reading ended
+      chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+        if (tab?.id) {
+          chrome.tabs.sendMessage(tab.id, { type: 'readPageEnded' }).catch(() => {});
+        }
+      }).catch(() => {});
+    }
     return;
   }
 
@@ -24,11 +36,11 @@ function speakChunkAt(i) {
     volume: 1,
     onEvent: (e) => {
       if (e.type === 'end') {
-        if (ttsIsReading) speakChunkAt(ttsIndex + 1);
+        if (ttsIsReading && !ttsIsPaused) speakChunkAt(ttsIndex + 1);
       }
       if (e.type === 'error') {
         console.error('[BACKGROUND TTS] error:', e.errorMessage);
-        if (ttsIsReading) speakChunkAt(ttsIndex + 1);
+        if (ttsIsReading && !ttsIsPaused) speakChunkAt(ttsIndex + 1);
       }
     }
   });
@@ -38,24 +50,56 @@ function startTtsReading(text) {
   ttsChunks = chunkText(text, 800);
   ttsIndex = 0;
   ttsIsReading = ttsChunks.length > 0;
+  ttsIsPaused = false;
   if (ttsIsReading) speakChunkAt(0);
 }
 
 function stopTtsReading() {
+  const wasReading = ttsIsReading;
   ttsIsReading = false;
+  ttsIsPaused = false;
   ttsChunks = [];
   ttsIndex = 0;
   chrome.tts.stop();
+  console.log('[BACKGROUND TTS] Stopped reading');
+  // Notify that reading ended
+  if (wasReading) {
+    chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+      if (tab?.id) {
+        chrome.tabs.sendMessage(tab.id, { type: 'readPageEnded' }).catch(() => {});
+      }
+    }).catch(() => {});
+  }
+}
+
+function pauseTtsReading() {
+  if (!ttsIsReading || ttsIsPaused) return;
+  ttsIsPaused = true;
+  chrome.tts.stop();
+  console.log('[BACKGROUND TTS] Paused reading at chunk', ttsIndex);
+}
+
+function resumeTtsReading() {
+  if (!ttsIsReading || !ttsIsPaused) return;
+  ttsIsPaused = false;
+  console.log('[BACKGROUND TTS] Resumed reading from chunk', ttsIndex);
+  speakChunkAt(ttsIndex);
 }
 
 function ffTts() {
   if (!ttsIsReading) return;
-  speakChunkAt(Math.min(ttsIndex + 1, ttsChunks.length - 1));
+  // Skip ahead 3 chunks (as UI indicates)
+  const newIndex = Math.min(ttsIndex + 3, ttsChunks.length - 1);
+  console.log('[BACKGROUND TTS] Fast forward from chunk', ttsIndex, 'to', newIndex);
+  speakChunkAt(newIndex);
 }
 
 function rwTts() {
   if (!ttsIsReading) return;
-  speakChunkAt(Math.max(ttsIndex - 1, 0));
+  // Skip back 3 chunks (as UI indicates)
+  const newIndex = Math.max(ttsIndex - 3, 0);
+  console.log('[BACKGROUND TTS] Rewind from chunk', ttsIndex, 'to', newIndex);
+  speakChunkAt(newIndex);
 }
 
 async function executeMappedCommand(mapped) {
@@ -88,7 +132,11 @@ async function executeMappedCommand(mapped) {
       }
       console.log('[BACKGROUND DEBUG] read_page: starting TTS, text length:', text.length);
       startTtsReading(text);
-      return { message: 'Reading page aloud.', action: 'read_page', content: text };
+      // Notify that reading started
+      try {
+        chrome.tabs.sendMessage(tab.id, { type: 'readPageStarted' }).catch(() => {});
+      } catch (_) {}
+      return { message: 'Reading page aloud.', action: 'read_page', content: text, tabId: tab.id };
     } catch (e) {
       console.error('[BACKGROUND DEBUG] read_page error:', e);
       return { message: 'Could not read page: ' + (e.message || 'injection failed'), action: null };
@@ -132,6 +180,38 @@ async function executeMappedCommand(mapped) {
 
 chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   console.log('[BACKGROUND DEBUG] Message received:', request.type, request.type === 'EXECUTE_COMMAND' ? request.command : (request.type === 'AI_PARSE_COMMAND' ? request.text : ''));
+  
+  // Handle TTS control messages directly
+  if (request.type === 'STOP_READING') {
+    stopTtsReading();
+    sendResponse({ success: true, message: 'Stopped reading' });
+    return false;
+  }
+  
+  if (request.type === 'PAUSE_READING') {
+    pauseTtsReading();
+    sendResponse({ success: true, message: 'Paused reading' });
+    return false;
+  }
+  
+  if (request.type === 'RESUME_READING') {
+    resumeTtsReading();
+    sendResponse({ success: true, message: 'Resumed reading' });
+    return false;
+  }
+  
+  if (request.type === 'FAST_FORWARD') {
+    ffTts();
+    sendResponse({ success: true, message: 'Fast forwarded' });
+    return false;
+  }
+  
+  if (request.type === 'REWIND') {
+    rwTts();
+    sendResponse({ success: true, message: 'Rewound' });
+    return false;
+  }
+  
   if (request.type === 'EXECUTE_COMMAND') {
     const mapped = self.mapParsedToInternal(request.command ?? { action: 'UNKNOWN' });
     console.log('[BACKGROUND DEBUG] Mapped command:', mapped);

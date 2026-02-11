@@ -1,6 +1,7 @@
 let recognition = null;
 let isListening = false;
 let isReading = false;
+let isPaused = false;
 let synth = window.speechSynthesis;
 let lastReadPageTabId = null;
 
@@ -31,13 +32,25 @@ function setupMessageListener() {
             handleSpeechError(message.error);
         } else if (message.type === 'readPageStarted') {
             isReading = true;
+            isPaused = false;
             document.getElementById('stopReadingBtn').style.display = 'block';
+            const pauseResumeBtn = document.getElementById('pauseResumeBtn');
+            if (pauseResumeBtn) {
+                pauseResumeBtn.textContent = '⏸️ Pause';
+                pauseResumeBtn.title = 'Pause reading';
+            }
             // Show playback controls when reading starts
             document.getElementById('playbackControls').classList.add('active');
             document.getElementById('progressDisplay').classList.add('active');
         } else if (message.type === 'readPageEnded') {
             isReading = false;
+            isPaused = false;
             document.getElementById('stopReadingBtn').style.display = 'none';
+            const pauseResumeBtn = document.getElementById('pauseResumeBtn');
+            if (pauseResumeBtn) {
+                pauseResumeBtn.textContent = '⏸️ Pause';
+                pauseResumeBtn.title = 'Pause reading';
+            }
             // Hide playback controls when reading ends
             document.getElementById('playbackControls').classList.remove('active');
             document.getElementById('progressDisplay').classList.remove('active');
@@ -241,20 +254,65 @@ function setupEventListeners() {
         }
     });
 
+    // Pause/Resume button handler
+    const pauseResumeBtn = document.getElementById('pauseResumeBtn');
+    if (pauseResumeBtn) {
+        pauseResumeBtn.addEventListener('click', () => {
+            if (isReading) {
+                if (isPaused) {
+                    // Resume
+                    chrome.runtime.sendMessage({ type: 'RESUME_READING' }, (response) => {
+                        if (chrome.runtime.lastError) {
+                            console.error('[POPUP] Resume error:', chrome.runtime.lastError);
+                        } else {
+                            isPaused = false;
+                            pauseResumeBtn.textContent = '⏸️ Pause';
+                            pauseResumeBtn.title = 'Pause reading';
+                        }
+                    });
+                } else {
+                    // Pause
+                    chrome.runtime.sendMessage({ type: 'PAUSE_READING' }, (response) => {
+                        if (chrome.runtime.lastError) {
+                            console.error('[POPUP] Pause error:', chrome.runtime.lastError);
+                        } else {
+                            isPaused = true;
+                            pauseResumeBtn.textContent = '▶️ Resume';
+                            pauseResumeBtn.title = 'Resume reading';
+                        }
+                    });
+                }
+            }
+        });
+    }
+
     document.getElementById('stopReadingBtn').addEventListener('click', () => {
-        chrome.runtime.sendMessage({ type: 'STOP_READING', tabId: lastReadPageTabId });
-        isReading = false;
-        document.getElementById('stopReadingBtn').style.display = 'none';
-        document.getElementById('playbackControls').classList.remove('active');
-        document.getElementById('progressDisplay').classList.remove('active');
+        chrome.runtime.sendMessage({ type: 'STOP_READING' }, (response) => {
+            if (chrome.runtime.lastError) {
+                console.error('[POPUP] Stop error:', chrome.runtime.lastError);
+            }
+            isReading = false;
+            isPaused = false;
+            document.getElementById('stopReadingBtn').style.display = 'none';
+            if (pauseResumeBtn) {
+                pauseResumeBtn.textContent = '⏸️ Pause';
+                pauseResumeBtn.title = 'Pause reading';
+            }
+            document.getElementById('playbackControls').classList.remove('active');
+            document.getElementById('progressDisplay').classList.remove('active');
+        });
     });
 
     // Fast forward button handler
     const fastForwardBtn = document.getElementById('fastForwardBtn');
     if (fastForwardBtn) {
         fastForwardBtn.addEventListener('click', () => {
-            if (isReading && lastReadPageTabId) {
-                chrome.runtime.sendMessage({ type: 'FAST_FORWARD', tabId: lastReadPageTabId });
+            if (isReading) {
+                chrome.runtime.sendMessage({ type: 'FAST_FORWARD' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        console.error('[POPUP] Fast forward error:', chrome.runtime.lastError);
+                    }
+                });
             }
         });
     }
@@ -263,8 +321,12 @@ function setupEventListeners() {
     const rewindBtn = document.getElementById('rewindBtn');
     if (rewindBtn) {
         rewindBtn.addEventListener('click', () => {
-            if (isReading && lastReadPageTabId) {
-                chrome.runtime.sendMessage({ type: 'REWIND', tabId: lastReadPageTabId });
+            if (isReading) {
+                chrome.runtime.sendMessage({ type: 'REWIND' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        console.error('[POPUP] Rewind error:', chrome.runtime.lastError);
+                    }
+                });
             }
         });
     }
@@ -549,6 +611,17 @@ function handleSpeechResult(transcript) {
         const stopReadingBtn = document.getElementById('stopReadingBtn');
         if (response.content && response.action === 'read_page') {
             lastReadPageTabId = response.tabId || null;
+            // Show controls when read_page starts
+            isReading = true;
+            isPaused = false;
+            stopReadingBtn.style.display = 'block';
+            const pauseResumeBtn = document.getElementById('pauseResumeBtn');
+            if (pauseResumeBtn) {
+                pauseResumeBtn.textContent = '⏸️ Pause';
+                pauseResumeBtn.title = 'Pause reading';
+            }
+            document.getElementById('playbackControls').classList.add('active');
+            document.getElementById('progressDisplay').classList.add('active');
         } else {
             lastReadPageTabId = null;
             stopReadingBtn.style.display = 'none';
