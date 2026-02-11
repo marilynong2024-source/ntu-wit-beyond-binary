@@ -1,319 +1,178 @@
-importScripts('../utils/commands.js');
+importScripts('../utils/command.js');
 
-const PROXY_BASE = 'http://localhost:3000';
-async function getParsedCommand(text) {
-    try {
-        const resp = await fetch(`${PROXY_BASE}/parse`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text, systemPrompt: self.SYSTEM_PROMPT })
-        });
-        if (!resp.ok) throw new Error(`Proxy error: ${resp.status}`);
-        const data = await resp.json();
-        const command = data?.command ?? self.fallbackParse(text);
-        if (!command || command.action === 'UNKNOWN') {
-            return self.fallbackParse(text);
-        }
-        return command;
-    } catch (e) {
-        return self.fallbackParse(text);
-    }
+let ttsChunks = [];
+let ttsIndex = 0;
+let ttsIsReading = false;
+
+function chunkText(text, size = 800) {
+  return (text || '').trim().match(new RegExp(`.{1,${size}}(\\s|$)`, 'g')) || [];
 }
 
-async function analyzeImageWithAI(imageData) {
-    const resp = await fetch(`${PROXY_BASE}/vision`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageData })
-    });
-    if (!resp.ok) throw new Error(`Proxy vision error: ${resp.status}`);
-    const data = await resp.json();
-    return data?.analysis ?? 'No analysis available';
+function speakChunkAt(i) {
+  if (!ttsIsReading || i < 0 || i >= ttsChunks.length) {
+    ttsIsReading = false;
+    return;
+  }
+
+  ttsIndex = i;
+  chrome.tts.stop();
+
+  chrome.tts.speak(ttsChunks[ttsIndex], {
+    lang: 'en-US',
+    rate: 1,
+    pitch: 1,
+    volume: 1,
+    onEvent: (e) => {
+      if (e.type === 'end') {
+        if (ttsIsReading) speakChunkAt(ttsIndex + 1);
+      }
+      if (e.type === 'error') {
+        console.error('[BACKGROUND TTS] error:', e.errorMessage);
+        if (ttsIsReading) speakChunkAt(ttsIndex + 1);
+      }
+    }
+  });
+}
+
+function startTtsReading(text) {
+  ttsChunks = chunkText(text, 800);
+  ttsIndex = 0;
+  ttsIsReading = ttsChunks.length > 0;
+  if (ttsIsReading) speakChunkAt(0);
+}
+
+function stopTtsReading() {
+  ttsIsReading = false;
+  ttsChunks = [];
+  ttsIndex = 0;
+  chrome.tts.stop();
+}
+
+function ffTts() {
+  if (!ttsIsReading) return;
+  speakChunkAt(Math.min(ttsIndex + 1, ttsChunks.length - 1));
+}
+
+function rwTts() {
+  if (!ttsIsReading) return;
+  speakChunkAt(Math.max(ttsIndex - 1, 0));
 }
 
 async function executeMappedCommand(mapped) {
-    console.log('[BACKGROUND DEBUG] Executing mapped command:', mapped);
-    if (!mapped?.action) {
-        return { message: mapped?.message ?? 'No action.', action: null };
-    }
+  console.log('[BACKGROUND DEBUG] executeMappedCommand:', mapped?.action, mapped);
+  if (!mapped || !mapped.action) {
+    return { message: 'Unknown command.', action: null };
+  }
 
-    if (mapped.action === 'open_website' && mapped.params?.url) {
-        try {
-            await chrome.tabs.create({ url: mapped.params.url });
-            return { message: mapped.message ?? `Opening ${mapped.params.url}`, action: mapped.action };
-        } catch (e) {
-            return { message: `Error: ${e.message}`, action: null };
-        }
-    }
-
-    if (mapped.action === 'describe_page') {
-        try {
-            const result = await captureAndDescribePage();
-            if (result.success) {
-                return { message: mapped.message ?? 'Page description generated', action: mapped.action, description: result.description };
-            }
-            return { message: result.error ?? 'Could not describe the page', action: null };
-        } catch (e) {
-            return { message: e.message ?? 'Could not describe the page', action: null };
-        }
-    }
-
-    if (mapped.action === 'stop_reading') {
-        try {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (!tab?.id) return { message: mapped.message ?? 'No active tab.', action: mapped.action };
-            await chrome.tabs.sendMessage(tab.id, { type: 'stopReading' });
-            return { message: mapped.message ?? 'Stopped reading', action: mapped.action };
-        } catch (e) {
-            try {
-                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-                if (tab?.id) {
-                    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['scripts/content.js'] });
-                    await new Promise(r => setTimeout(r, 100));
-                    await chrome.tabs.sendMessage(tab.id, { type: 'stopReading' });
-                }
-                return { message: mapped.message ?? 'Stopped reading', action: mapped.action };
-            } catch (_) {
-                return { message: mapped.message ?? 'Could not stop reading', action: mapped.action };
-            }
-        }
-    }
-    // Handle fast forward action
-    if (mapped.action === 'fast_forward') {
-        try {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (!tab?.id) return { message: mapped.message ?? 'No active tab.', action: mapped.action };
-            await chrome.tabs.sendMessage(tab.id, { type: 'fastForward' });
-            return { message: mapped.message ?? 'Fast forwarded', action: mapped.action };
-        } catch (e) {
-            try {
-                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-                if (tab?.id) {
-                    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['scripts/content.js'] });
-                    await new Promise(r => setTimeout(r, 100));
-                    await chrome.tabs.sendMessage(tab.id, { type: 'fastForward' });
-                }
-                return { message: mapped.message ?? 'Fast forwarded', action: mapped.action };
-            } catch (_) {
-                return { message: mapped.message ?? 'Could not fast forward', action: mapped.action };
-            }
-        }
-    }
-
-    // Handle rewind action
-    if (mapped.action === 'rewind') {
-        try {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (!tab?.id) return { message: mapped.message ?? 'No active tab.', action: mapped.action };
-            await chrome.tabs.sendMessage(tab.id, { type: 'rewind' });
-            return { message: mapped.message ?? 'Rewound', action: mapped.action };
-        } catch (e) {
-            try {
-                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-                if (tab?.id) {
-                    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['scripts/content.js'] });
-                    await new Promise(r => setTimeout(r, 100));
-                    await chrome.tabs.sendMessage(tab.id, { type: 'rewind' });
-                }
-                return { message: mapped.message ?? 'Rewound', action: mapped.action };
-            } catch (_) {
-                return { message: mapped.message ?? 'Could not rewind', action: mapped.action };
-            }
-        }
-    }
-
-
+  if (mapped.action === 'read_page') {
+    console.log('[BACKGROUND DEBUG] read_page: querying active tab');
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) return { message: mapped.message ?? 'No active tab.', action: mapped.action };
-
-    if (tab.url && (tab.url.startsWith("chrome://") || tab.url.includes("chromewebstore.google.com"))) {
-        return { message: "Can't read aloud on this page due to Chrome restrictions.", action: null };
+    if (!tab?.id) {
+      console.error('[BACKGROUND DEBUG] read_page: no active tab');
+      return { message: 'No active tab.', action: null };
     }
+    console.log('[BACKGROUND DEBUG] read_page: sending executeAction to tab', tab.id);
 
     try {
-        console.log('[BACKGROUND DEBUG] Sending executeAction to tab:', tab.id, 'Action:', mapped.action, 'Params:', mapped.params);
-        const executionResult = await chrome.tabs.sendMessage(tab.id, {
-            type: 'executeAction',
-            action: mapped.action,
-            params: mapped.params ?? {}
-        });
-        console.log('[BACKGROUND DEBUG] Execution result:', executionResult);
-        return {
-            message: mapped.message ?? executionResult?.message ?? 'Done.',
-            action: mapped.action,
-            content: executionResult?.content,
-            description: executionResult?.description,
-            tabId: tab.id
-        };
-    } catch (error) {
-        console.log('[BACKGROUND DEBUG] Error executing action, trying to inject script:', error.message);
-        try {
-            await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['scripts/content.js'] });
-            await new Promise(r => setTimeout(r, 100));
-            const executionResult = await chrome.tabs.sendMessage(tab.id, {
-                type: 'executeAction',
-                action: mapped.action,
-                params: mapped.params ?? {}
-            });
-            return {
-                message: mapped.message ?? executionResult?.message ?? 'Done.',
-                action: mapped.action,
-                content: executionResult?.content,
-                description: executionResult?.description,
-                tabId: tab.id
-            };
-        } catch (_) {
-            return { message: mapped.message ?? 'Could not execute on this page.', action: mapped.action };
-        }
-    }
-}
+      const res = await chrome.tabs.sendMessage(tab.id, {
+        type: 'executeAction',
+        action: 'read_page',
+        params: {}
+      });
+      console.log('[BACKGROUND DEBUG] read_page: content script response', res ? { message: res.message, contentLength: res.content?.length } : res);
 
-async function handleCommandProcessing(command) {
-    try {
-        const parsed = await getParsedCommand(command);
-        const mapped = self.mapParsedToInternal(parsed);
-        return executeMappedCommand(mapped);
+      const text = (res?.content || '').trim();
+      if (!text) {
+        console.warn('[BACKGROUND DEBUG] read_page: no text in response');
+        return { message: 'No readable text found.', action: null };
+      }
+      console.log('[BACKGROUND DEBUG] read_page: starting TTS, text length:', text.length);
+      startTtsReading(text);
+      return { message: 'Reading page aloud.', action: 'read_page', content: text };
     } catch (e) {
-        return { message: e.message ?? 'Error', action: null };
+      console.error('[BACKGROUND DEBUG] read_page error:', e);
+      return { message: 'Could not read page: ' + (e.message || 'injection failed'), action: null };
     }
-}
+  }
 
-async function handleImageAnalysis(imageData) {
-    try {
-        const analysis = await analyzeImageWithAI(imageData);
-        return { analysis };
-    } catch (e) {
-        return { error: e.message };
-    }
-}
+  if (mapped.action === 'stop_reading') {
+    stopTtsReading();
+    return { message: 'Stopped reading.', action: 'stop_reading' };
+  }
 
-async function handleActionExecution(action, params) {
-    try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (!tab?.id) return { error: 'No active tab found' };
-        const result = await chrome.tabs.sendMessage(tab.id, { type: 'executeAction', action, params: params ?? {} });
-        return result ?? { success: true };
-    } catch (e) {
-        return { error: e.message };
-    }
-}
+  if (mapped.action === 'fast_forward') {
+    ffTts();
+    return { message: 'Fast forwarded.', action: 'fast_forward' };
+  }
 
-async function captureAndDescribePage() {
-    try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (!tab?.id) return { error: 'No active tab found' };
-        const dataUrl = await chrome.tabs.captureVisibleTab(null, { format: 'png', quality: 100 });
-        const analysis = await analyzeImageWithAI(dataUrl);
-        return { success: true, description: analysis, message: 'Page description generated' };
-    } catch (e) {
-        return { error: e.message };
-    }
+  if (mapped.action === 'rewind') {
+    rwTts();
+    return { message: 'Rewound.', action: 'rewind' };
+  }
+
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) return { message: 'No active tab.', action: null };
+  try {
+    const res = await chrome.tabs.sendMessage(tab.id, {
+      type: 'executeAction',
+      action: mapped.action,
+      params: mapped.params || {}
+    });
+    return {
+      message: res?.message || 'Done',
+      description: res?.description,
+      content: res?.content,
+      action: mapped.action
+    };
+  } catch (e) {
+    console.error('[BACKGROUND] executeAction error:', e);
+    return { message: 'Error: ' + (e.message || 'failed'), action: mapped.action };
+  }
 }
 
 chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
-    const asyncResponse = (p) => {
-        p.then(sendResponse).catch(e => sendResponse({ error: e.message }));
-    };
-
-    if (request.type === 'processCommand') {
-        asyncResponse(handleCommandProcessing(request.command));
-        return true;
-    }
-    if (request.type === 'AI_PARSE_COMMAND') {
-        getParsedCommand(request.text).then(parsed => sendResponse({ command: parsed })).catch(() => sendResponse({ command: self.fallbackParse(request.text) }));
-        return true;
-    }
-    if (request.type === 'EXECUTE_COMMAND') {
-        const mapped = self.mapParsedToInternal(request.command ?? { action: 'UNKNOWN' });
-        asyncResponse(executeMappedCommand(mapped));
-        return true;
-    }
-    if (request.type === 'analyzeImage') {
-        asyncResponse(handleImageAnalysis(request.imageData));
-        return true;
-    }
-    if (request.type === 'executeAction') {
-        asyncResponse(handleActionExecution(request.action, request.params));
-        return true;
-    }
-    if (request.type === 'SPEAK_IN_TAB') {
-        asyncResponse((async () => {
-            const tabId = request.tabId || (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
-            if (!tabId || !request.text) return { success: true };
-            try {
-                await chrome.tabs.sendMessage(tabId, { type: 'speak', text: request.text });
-            } catch (e) {
-                try {
-                    await chrome.scripting.executeScript({ target: { tabId }, files: ['scripts/content.js'] });
-                    await new Promise(r => setTimeout(r, 200));
-                    await chrome.tabs.sendMessage(tabId, { type: 'speak', text: request.text });
-                } catch (_) { }
-            }
-            return { success: true };
-        })());
-        return true;
-    }
-    if (request.type === 'STOP_READING') {
-        asyncResponse((async () => {
-            const tabId = request.tabId || (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
-            if (!tabId) return { success: true };
-            try {
-                await chrome.tabs.sendMessage(tabId, { type: 'stopReading' });
-            } catch (e) {
-                try {
-                    await chrome.scripting.executeScript({ target: { tabId }, files: ['scripts/content.js'] });
-                    await new Promise(r => setTimeout(r, 100));
-                    await chrome.tabs.sendMessage(tabId, { type: 'stopReading' });
-                } catch (_) { }
-            }
-            return { success: true };
-        })());
-        return true;
-    }
-    // New handlers for fast forward and rewind
-    if (request.type === 'FAST_FORWARD') {
-        asyncResponse((async () => {
-            const tabId = request.tabId || (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
-            if (!tabId) return { success: true };
-            try {
-                await chrome.tabs.sendMessage(tabId, { type: 'fastForward' });
-            } catch (e) {
-                try {
-                    await chrome.scripting.executeScript({ target: { tabId }, files: ['scripts/content.js'] });
-                    await new Promise(r => setTimeout(r, 100));
-                    await chrome.tabs.sendMessage(tabId, { type: 'fastForward' });
-                } catch (_) { }
-            }
-            return { success: true };
-        })());
-        return true;
-    }
-
-    if (request.type === 'REWIND') {
-        asyncResponse((async () => {
-            const tabId = request.tabId || (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
-            if (!tabId) return { success: true };
-            try {
-                await chrome.tabs.sendMessage(tabId, { type: 'rewind' });
-            } catch (e) {
-                try {
-                    await chrome.scripting.executeScript({ target: { tabId }, files: ['scripts/content.js'] });
-                    await new Promise(r => setTimeout(r, 100));
-                    await chrome.tabs.sendMessage(tabId, { type: 'rewind' });
-                } catch (_) { }
-            }
-            return { success: true };
-        })());
-        return true;
-    }
-    if (request.type === 'captureAndDescribePage') {
-        asyncResponse(captureAndDescribePage());
-        return true;
-    }
-    if (['speechRecognitionResult', 'speechRecognitionError', 'speechRecognitionStatus'].includes(request.type)) {
-        chrome.runtime.sendMessage(request).catch(() => { });
-        return false;
-    }
+  console.log('[BACKGROUND DEBUG] Message received:', request.type, request.type === 'EXECUTE_COMMAND' ? request.command : (request.type === 'AI_PARSE_COMMAND' ? request.text : ''));
+  if (request.type === 'EXECUTE_COMMAND') {
+    const mapped = self.mapParsedToInternal(request.command ?? { action: 'UNKNOWN' });
+    console.log('[BACKGROUND DEBUG] Mapped command:', mapped);
+    executeMappedCommand(mapped).then((result) => {
+      console.log('[BACKGROUND DEBUG] executeMappedCommand result:', result?.message, 'action:', result?.action);
+      sendResponse(result);
+    }).catch(e => {
+      console.error('[BACKGROUND DEBUG] executeMappedCommand error:', e);
+      sendResponse({ error: e.message });
+    });
+    return true;
+  }
+  if (request.type === 'AI_PARSE_COMMAND') {
+    const fallback = self.fallbackParse(request.text);
+    console.log('[BACKGROUND DEBUG] AI_PARSE fallback:', fallback);
+    sendResponse({ command: fallback });
+    return false;
+  }
 });
 
-chrome.runtime.onInstalled.addListener(() => { });
+chrome.commands.onCommand.addListener(async (command) => {
+  console.log('[BACKGROUND DEBUG] Command received:', command);
+  if (command === 'read_page') {
+    const mapped = { action: 'read_page', params: {}, message: 'Reading page aloud.' };
+    await executeMappedCommand(mapped);
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: 'readPageStarted' }).catch(() => {});
+    } catch (_) {}
+  }
+  if (command === 'stop_reading') {
+    stopTtsReading();
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: 'STOP_SPEECH' }).catch(() => {});
+    } catch (_) {}
+  }
+  if (command === 'activate_assistant') {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: 'ACTIVATE_ASSISTANT' }).catch(() => {});
+    } catch (_) {}
+  }
+});
