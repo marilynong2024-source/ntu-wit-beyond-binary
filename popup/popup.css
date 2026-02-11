@@ -383,6 +383,64 @@ section h2 {
     white-space: pre-wrap;
 }
 
+/* Accessibility Features Section */
+.accessibility-section {
+    background: #f0f8ff;
+    padding: 16px;
+    border-radius: 12px;
+    border: 2px solid #4A90E2;
+}
+
+.accessibility-group {
+    margin-bottom: 20px;
+    padding: 12px;
+    background: white;
+    border-radius: 8px;
+    border-left: 4px solid #4A90E2;
+}
+
+.accessibility-group:last-child {
+    margin-bottom: 0;
+}
+
+.accessibility-group h3 {
+    font-size: 15px;
+    color: #2C3E50;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.accessibility-btn {
+    width: 100%;
+    padding: 12px;
+    margin: 6px 0;
+    background: white;
+    color: #4A90E2;
+    border: 2px solid #4A90E2;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.accessibility-btn:hover {
+    background: #27ae60;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(74, 144, 226, 0.3);
+}
+
+.accessibility-btn.active {
+    background: #27ae60;
+    color: white;
+    border-color: #27ae60;
+}
+
+.accessibility-btn:active {
+    transform: translateY(0);
+}
+
 /* History Section */
 .history-section {
     background: #f8f9fa;
