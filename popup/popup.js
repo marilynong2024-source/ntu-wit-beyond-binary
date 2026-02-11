@@ -3,6 +3,8 @@ let isListening = false;
 let isReading = false;
 let synth = window.speechSynthesis;
 let lastReadPageTabId = null;
+let listeningSessionTimer = null;
+const MAX_LISTENING_SESSION_MS = 8000;
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log('[POPUP] DOMContentLoaded - setting up listeners');
@@ -13,17 +15,41 @@ document.addEventListener('DOMContentLoaded', () => {
     checkMicrophonePermission();
     setupMessageListener();
     console.log('[POPUP] Message listener setup complete');
-
-    chrome.storage.local.get(['enableContinuousListening'], (result) => {
-        if (result.enableContinuousListening) {
-            setTimeout(() => {
-                if (!isListening) {
-                    tryContentScriptRecognition().catch(() => { });
-                }
-            }, 500);
-        }
-    });
 });
+
+function clearListeningSessionTimer() {
+    if (listeningSessionTimer) {
+        clearTimeout(listeningSessionTimer);
+        listeningSessionTimer = null;
+    }
+}
+
+function setListeningInactiveUI() {
+    isListening = false;
+    document.getElementById('listenBtnText').textContent = 'Start Listening';
+    document.getElementById('listenBtn').disabled = false;
+}
+
+async function stopContentSpeechRecognition() {
+    try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab?.id) return false;
+        await chrome.tabs.sendMessage(tab.id, { type: 'stopSpeechRecognition' });
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
+function startListeningSessionTimer() {
+    clearListeningSessionTimer();
+    listeningSessionTimer = setTimeout(async () => {
+        if (!isListening) return;
+        await stopContentSpeechRecognition();
+        setListeningInactiveUI();
+        updateStatus('ready', 'Ready to listen');
+    }, MAX_LISTENING_SESSION_MS);
+}
 
 function setupMessageListener() {
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -67,11 +93,11 @@ function setupMessageListener() {
                 updateStatus('listening', 'Listening...');
                 document.getElementById('listenBtnText').textContent = 'Listening...';
                 document.getElementById('listenBtn').disabled = true;
+                startListeningSessionTimer();
             } else if (message.status === 'ended') {
-                isListening = false;
+                clearListeningSessionTimer();
+                setListeningInactiveUI();
                 updateStatus('ready', 'Ready to listen');
-                document.getElementById('listenBtnText').textContent = 'Start Listening';
-                document.getElementById('listenBtn').disabled = false;
             }
         }
         return false;
@@ -121,39 +147,18 @@ function initializeSpeechRecognition() {
         };
 
         recognition.onerror = (event) => {
-            isListening = false;
-            document.getElementById('listenBtnText').textContent = 'Start Listening';
-            document.getElementById('listenBtn').disabled = false;
+            clearListeningSessionTimer();
+            setListeningInactiveUI();
             if (event.error === 'not-allowed') {
                 updateStatus('ready', 'Ready to listen');
             }
-            chrome.storage.local.get(['enableContinuousListening'], (result) => {
-                if (result.enableContinuousListening && event.error !== 'not-allowed' && event.error !== 'aborted') {
-                    setTimeout(() => {
-                        if (!isListening && !isReading) {
-                            tryContentScriptRecognition().catch(() => { });
-                        }
-                    }, 1000);
-                }
-            });
         };
 
         recognition.onend = () => {
             if (isListening) {
-                isListening = false;
+                clearListeningSessionTimer();
+                setListeningInactiveUI();
                 updateStatus('ready', 'Ready to listen');
-                document.getElementById('listenBtnText').textContent = 'Start Listening';
-                document.getElementById('listenBtn').disabled = false;
-
-                chrome.storage.local.get(['enableContinuousListening'], (result) => {
-                    if (result.enableContinuousListening && !isReading) {
-                        setTimeout(() => {
-                            if (!isListening) {
-                                tryContentScriptRecognition().catch(() => { });
-                            }
-                        }, 500);
-                    }
-                });
             }
         };
     }
@@ -163,6 +168,7 @@ function setupEventListeners() {
     document.getElementById('listenBtn').addEventListener('click', async () => {
         console.log('[POPUP DEBUG] Start Listening clicked, isListening:', isListening);
         if (!isListening) {
+            clearListeningSessionTimer();
             // Immediate feedback so user sees something even if popup loses focus
             updateStatus('listening', 'Starting...');
             document.getElementById('listenBtnText').textContent = 'Starting...';
@@ -190,6 +196,7 @@ function setupEventListeners() {
                 isListening = true;
                 updateStatus('listening', 'Listening...');
                 document.getElementById('listenBtnText').textContent = 'Listening...';
+                startListeningSessionTimer();
             }
         }
     });
@@ -567,6 +574,8 @@ async function tryContentScriptRecognition() {
 
 function handleSpeechResult(transcript) {
     console.log('[POPUP DEBUG] handleSpeechResult, transcript:', transcript);
+    clearListeningSessionTimer();
+    setListeningInactiveUI();
     document.getElementById('transcript').textContent = transcript;
     document.getElementById('transcriptBox').style.display = 'block';
     document.getElementById('response').textContent = transcript + '\n\nProcessing...';
@@ -574,20 +583,9 @@ function handleSpeechResult(transcript) {
     updateStatus('processing', 'Processing command...');
 
     function finishListening() {
+        clearListeningSessionTimer();
+        setListeningInactiveUI();
         updateStatus('ready', 'Ready to listen');
-        document.getElementById('listenBtnText').textContent = 'Start Listening';
-        document.getElementById('listenBtn').disabled = false;
-        isListening = false;
-
-        chrome.storage.local.get(['enableContinuousListening'], (result) => {
-            if (result.enableContinuousListening) {
-                setTimeout(() => {
-                    if (!isListening && !isReading) {
-                        tryContentScriptRecognition().catch(() => { });
-                    }
-                }, 500);
-            }
-        });
     }
 
     function applyExecutionResponse(response) {
@@ -652,13 +650,15 @@ function handleSpeechResult(transcript) {
 }
 
 function handleSpeechError(error) {
-    isListening = false;
+    clearListeningSessionTimer();
+    setListeningInactiveUI();
     updateStatus('ready', 'Ready to listen');
-    document.getElementById('listenBtnText').textContent = 'Start Listening';
-    document.getElementById('listenBtn').disabled = false;
 
     if (error === 'not-allowed') {
         showPermissionInstructions({ name: 'NotAllowedError', message: 'not-allowed' });
+    } else if (error === 'aborted' || error === 'no-speech') {
+        // Expected when recognition is auto-stopped or user says nothing.
+        return;
     } else {
         document.getElementById('response').textContent = `Error: ${error}. Please try again.`;
         document.getElementById('responseBox').style.display = 'block';
@@ -706,10 +706,5 @@ document.getElementById('enableTTS').addEventListener('change', (e) => {
 
 document.getElementById('enableContinuousListening').addEventListener('change', (e) => {
     chrome.storage.local.set({ enableContinuousListening: e.target.checked });
-    if (e.target.checked && !isListening && !isReading) {
-        setTimeout(() => {
-            tryContentScriptRecognition().catch(() => { });
-        }, 300);
-    }
 });
 
