@@ -3,12 +3,7 @@
   "name": "Accessibility Extension",
   "version": "1.0.1",
   "description": "AI-powered voice-controlled interface for accessible web browsing with image explanation capabilities",
-  "permissions": [
-    "activeTab",
-    "tabs",
-    "storage",
-    "scripting"
-  ],
+  "permissions": ["tts", "tabs", "scripting", "activeTab", "storage"],
   "optional_permissions": [
     "desktopCapture"
   ],
@@ -45,6 +40,29 @@
       "resources": ["popup/*"],
       "matches": ["<all_urls>"]
     }
-  ]
+  ],
+  "commands": {
+    "activate_assistant": {
+      "suggested_key": {
+        "default": "Alt+Shift+A",
+        "mac": "Option+Shift+A"
+      },
+      "description": "Activate assistant (speaks confirmation)"
+    },
+    "read_page": {
+      "suggested_key": {
+        "default": "Alt+Shift+R",
+        "mac": "Option+Shift+R"
+      },
+      "description": "Read page aloud"
+    },
+    "stop_reading": {
+      "suggested_key": {
+        "default": "Alt+Shift+S",
+        "mac": "Option+Shift+S"
+      },
+      "description": "Stop reading"
+    }
+  }
 }
 
