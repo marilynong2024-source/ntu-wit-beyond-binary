@@ -1,4 +1,4 @@
-# 🎤 AI Voice Assistant – Chrome Extension
+# 🎤 AI Voice Assistant – Chrome Extension 
 
 An accessible Chrome extension for voice-controlled web browsing. Uses AI (Google Gemini via a local proxy) to understand spoken or typed commands and control the browser. Includes an **Image Explainer** for descriptions and text extraction (OCR). Built for accessibility.
 
