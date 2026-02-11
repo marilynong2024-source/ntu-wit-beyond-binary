@@ -77,37 +77,46 @@ Read page content aloud:
 
 | Command | What It Does | Example |
 |---------|--------------|---------|
-| **"read this page"** | Extracts and reads page content | "read this page", "read page", "read the content" |
+| **"read this page"** | Extracts and reads page content aloud | "read this page", "read page", "read the content", "read aloud" |
+| **"stop"** | Stops reading immediately | "stop", "stop reading", "stop speaking" |
 
 **How It Works:**
 - Extracts main content (skips navigation, ads, headers)
-- Reads it aloud using text-to-speech
+- Reads it aloud using Chrome TTS API (background script)
 - Shows character count in response
+- Provides playback controls: pause/resume, fast-forward, rewind, stop
+
+**Playback Controls (in popup):**
+- **⏸️ Pause/Resume** - Pause or resume reading
+- **⏪ Rewind** - Skip back 3 chunks
+- **⏹️ Stop** - Stop reading completely
+- **⏩ Fast Forward** - Skip ahead 3 chunks
+
+**Keyboard Shortcut:**
+- **Option+Shift+R** (Mac) / **Alt+Shift+R** (Win/Linux) - Read page aloud
+- **Option+Shift+S** / **Alt+Shift+S** - Stop reading
 
 **Natural Language Examples:**
 - "What's on this page?"
 - "Read the content to me"
 - "Tell me what this page says"
+- "Stop reading"
+- "Pause reading"
 
 ---
 
-## 🖼️ **Page Description Commands** ⭐ NEW!
+## 🖼️ **Page Description Commands**
 
-Get a visual AI-powered description of the current web page:
+Get a description of the current web page:
 
 | Command | What It Does | Example |
 |---------|--------------|---------|
-| **"describe this page"** | Captures screenshot and provides visual description | "describe this page", "what does this page look like" |
+| **"describe this page"** | Provides description of page content | "describe this page", "what does this page look like" |
 
 **How It Works:**
-- Captures a screenshot of the current page
-- Sends it to GPT-4o Vision API for analysis
-- Provides detailed visual description including:
-  - Layout and structure
-  - Colors and design elements
-  - Text content (OCR)
-  - Key visual elements
-  - Accessibility insights
+- Extracts and describes page content
+- Uses AI (via Gemini proxy) to provide structured description
+- Provides information about page structure and content
 
 **Natural Language Examples:**
 - "Describe this page"
@@ -115,7 +124,7 @@ Get a visual AI-powered description of the current web page:
 - "Tell me about the visual appearance of this page"
 - "Describe the layout"
 
-**Note**: Requires GPT-4o API access (same as image analysis feature)
+**Note**: Requires ai-proxy running with Gemini API key
 
 ---
 
@@ -171,33 +180,17 @@ Open new websites:
 
 ---
 
-## 🖼️ **Image Analysis Commands**
-
-Analyze images (via Image Explainer feature):
-
-| Command | What It Does | Example |
-|---------|--------------|---------|
-| **Upload/Capture Image** | Analyze image with AI | Use the Image Explainer section in popup |
-
-**Features:**
-- Upload image files
-- Capture screen/window
-- Get detailed AI analysis including:
-  - Visual description
-  - Text extraction (OCR)
-  - Object identification
-  - Accessibility insights
-
 ---
 
 ## 💡 **Tips for Using Commands**
 
 ### 1. **Natural Language Works!**
-You don't need exact keywords. The AI understands:
+You don't need exact keywords. The AI (via Gemini) or fallback parser understands:
 - ✅ "Can you scroll down?"
 - ✅ "I want to go back"
 - ✅ "Please click the submit button"
 - ✅ "What's on this page?"
+- ✅ "Stop reading"
 
 ### 2. **Partial Matches Work**
 For clicking elements:
@@ -209,13 +202,33 @@ For clicking elements:
 The AI understands context:
 - "scroll down" vs "scroll up"
 - "go back" vs "go forward"
+- "read this page" vs "stop reading"
 - Natural variations of commands
 
-### 4. **Error Handling**
+### 4. **Fallback Works Without Proxy**
+Even if the ai-proxy is not running, many commands work via fallback pattern matching:
+- "open google", "scroll down", "go back", "read this page", "stop"
+- Complex commands require the proxy for AI parsing
+
+### 5. **Error Handling**
 If a command can't be executed:
 - Clear error messages explain what went wrong
 - Suggestions for alternative commands
-- Fallback to pattern matching if AI is unavailable
+- Fallback to pattern matching if AI proxy unavailable
+
+---
+
+## ⌨️ **Keyboard Shortcuts**
+
+Quick access without voice commands:
+
+| Shortcut | Action |
+|----------|--------|
+| **Option+Shift+A** (Mac) / **Alt+Shift+A** (Win/Linux) | Activate assistant (speaks confirmation) |
+| **Option+Shift+R** / **Alt+Shift+R** | Read page aloud |
+| **Option+Shift+S** / **Alt+Shift+S** | Stop reading |
+
+**Note:** Keyboard shortcuts work from any tab, even without opening the popup.
 
 ---
 
@@ -242,10 +255,11 @@ The extension focuses on browser control. It **cannot**:
 2. **"scroll up"** - Scroll page up
 3. **"go back"** - Browser back
 4. **"click [button name]"** - Click element
-5. **"read this page"** - Read content
-6. **"search for [query]"** - Search page
-7. **"open [website]"** - Open website
-8. **"refresh"** - Reload page
+5. **"read this page"** - Read content aloud
+6. **"stop"** - Stop reading
+7. **"search for [query]"** - Search page
+8. **"open [website]"** - Open website
+9. **"refresh"** - Reload page
 
 ### Navigation:
 - go back, go forward, refresh
@@ -258,6 +272,7 @@ The extension focuses on browser control. It **cannot**:
 
 ### Content:
 - read this page
+- stop (stops reading)
 
 ### Search:
 - search for [query]
@@ -270,9 +285,11 @@ The extension focuses on browser control. It **cannot**:
 ## 🎯 **Example Usage Scenarios**
 
 ### Scenario 1: Reading an Article
-1. "scroll down" - Read more content
-2. "scroll up" - Go back up
-3. "read this page" - Hear the content
+1. "read this page" - Start reading aloud
+2. Use playback controls: pause/resume, fast-forward, rewind as needed
+3. "stop" - Stop reading when done
+4. "scroll down" - Read more content
+5. "scroll up" - Go back up
 
 ### Scenario 2: Filling a Form
 1. "scroll down" - Find form fields

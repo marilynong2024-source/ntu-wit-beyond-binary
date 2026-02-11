@@ -9,6 +9,7 @@ An accessible Chrome extension for voice-controlled web browsing. Uses AI (Googl
 - **Action execution** – Scroll, click, open URLs, search, back/forward, refresh, **read page aloud** (TTS in background), describe page.
 - **Voice feedback (TTS)** – Optional spoken confirmations; **read page** uses Chrome’s `chrome.tts` in the background for reliable playback.
 - **Keyboard shortcuts** – **Option+Shift+A** (activate assistant), **Option+Shift+R** (read page aloud), **Option+Shift+S** (stop reading).
+- **Accessibility tools** – **Simplified Reading** (cleaner page layout for easier reading), **Target Size controls** (increase/decrease click target sizes for motor impairments).
 
 ### Supported commands
 
@@ -96,6 +97,11 @@ When the proxy is unavailable, the built-in fallback handles common phrases (e.g
 - **Enable voice feedback (TTS)** – Turn spoken confirmations on or off.
 - **Continuous listening** – After each command, automatically start listening again (optional).
 
+### Accessibility Tools (popup)
+
+- **Simplified Reading** – Click to simplify the current page layout: removes ads/navigation, optimizes typography (18px font, 1.5 line height, left-aligned), narrows content width for better readability. A "Restore page" button appears to return to the original view.
+- **Target Size** – Increase or decrease click target sizes on the page to make buttons and links easier to click (helpful for motor impairments).
+
 ## 🏗️ Architecture
 
 ### Layout
@@ -147,7 +153,8 @@ When the proxy is unavailable, the built-in fallback handles common phrases (e.g
 ## 🧪 Testing
 
 - Use on normal web pages (e.g. Wikipedia, Gmail, news sites). `chrome://` pages are not supported.
-- Try: "scroll down", "go back", "open google", "read this page", "click [button label]".
+- Try voice commands: "scroll down", "go back", "open google", "read this page", "click [button label]".
+- Try accessibility tools: Click **Simplified Reading** to see a cleaner page layout, or use **Target Size** controls to adjust click target sizes.
 
 ## 🐛 Troubleshooting
 

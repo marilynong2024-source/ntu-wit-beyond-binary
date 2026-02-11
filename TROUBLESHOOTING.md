@@ -78,20 +78,24 @@ This error means Chrome hasn't granted microphone permission to the extension.
    - Go to Console tab
    - Look for error messages when clicking "Start Listening"
 
-## TTS (Text-to-Speech) Not Working
+## Read Page Aloud Not Working
 
 If you don't hear anything when the extension reads pages aloud:
 
 ### Quick Test:
-Open the browser console (F12) on any webpage and run:
-```javascript
-speechSynthesis.speak(new SpeechSynthesisUtterance("Hello, this is a test"))
-```
-If you don't hear "Hello, this is a test", Chrome's TTS isn't working.
+The extension uses Chrome's `chrome.tts` API (not Web Speech Synthesis) for read-aloud. Check:
+
+1. **Check Chrome TTS**: Open Chrome DevTools console (F12) and run:
+   ```javascript
+   chrome.tts.speak("Test", { lang: 'en-US' })
+   ```
+   If you don't hear "Test", Chrome TTS may not be working.
+
+2. **Check System Audio**: Ensure your system volume is up and audio output device is correct.
 
 ### Fixes:
 
-**1. Check macOS System Settings:**
+**1. Check macOS System Settings (for chrome.tts):**
 - System Settings → **Accessibility** → **Spoken Content**
 - Ensure **"Speak selection"** is ON
 - Check that **"System voice"** is set (e.g., "Samantha")
@@ -102,24 +106,78 @@ If you don't hear "Hello, this is a test", Chrome's TTS isn't working.
 - If muted, click "Unmute site"
 - Check system volume and output device
 
-**3. Test System TTS:**
-- On macOS: Select some text and press **Option + Esc** (or use Edit → Speech → Start Speaking)
-- If system TTS works but Chrome doesn't, it's a Chrome-specific issue
+**3. Check Background Script:**
+- Go to `chrome://extensions/`
+- Find your extension → Click **"Service worker"** or **"Inspect views: service worker"**
+- Check Console for TTS errors
+- Look for `[BACKGROUND TTS]` debug messages
 
-**4. Chrome Flags (if needed):**
-- Go to `chrome://flags`
-- Search for "speech" or "synthesis"
-- Ensure nothing is disabled
+**4. Test Read Page Shortcut:**
+- Press **Option+Shift+R** (Mac) or **Alt+Shift+R** (Win/Linux)
+- This should trigger read-aloud even if popup doesn't work
 
-**5. Restart Chrome:**
+**5. Check Permissions:**
+- Ensure extension has **tts** permission in manifest
+- Reload extension if permissions changed
+
+**6. Restart Chrome:**
 - Close all Chrome windows completely
 - Reopen Chrome
-- Test TTS again in console
+- Try read-aloud again
 
-**6. Check Console for Errors:**
+## Simplified Reading Not Working
+
+If clicking **Simplified Reading** doesn't simplify the page:
+
+**1. Check Console for Errors:**
 - Open DevTools (F12) → Console
-- Run the test command above
-- Look for any error messages (e.g., "not-allowed", "failed", etc.)
+- Click **Simplified Reading** button
+- Look for error messages (e.g., "Could not establish connection", "simplifyPageContent is not defined")
+
+**2. Refresh the Page:**
+- Some sites may block content script modifications
+- Refresh the page and try again
+
+**3. Check Content Script:**
+- Ensure content script is loaded (check Console for `[CONTENT DEBUG]` messages)
+- If not loaded, refresh the page
+
+**4. Restore Button Not Working:**
+- If "Restore page" button doesn't restore the original page, refresh the page manually
+- The original HTML is saved in `window.__simplify_original_html`
+
+## Target Size Controls Not Working
+
+If **Increase/Decrease Target Size** buttons don't work:
+
+**1. Check Console for Errors:**
+- Open DevTools (F12) → Console
+- Click the buttons and look for errors
+
+**2. Refresh the Page:**
+- Content script needs to be loaded
+- Refresh the page and try again
+
+**3. Check Content Script:**
+- Ensure content script is loaded
+- Check Console for `[CONTENT DEBUG]` messages
+
+## Playback Controls Not Working
+
+If pause/resume/fast-forward/rewind/stop buttons don't work:
+
+**1. Check if Reading Started:**
+- Buttons only appear when reading is active
+- Ensure read-aloud started successfully
+
+**2. Check Background Script:**
+- Go to `chrome://extensions/` → **"Service worker"**
+- Check Console for `[BACKGROUND TTS]` messages
+- Look for errors when clicking buttons
+
+**3. Buttons Disappear:**
+- If buttons disappear after clicking, check Console for `readPageEnded` messages
+- This might indicate reading stopped unexpectedly
 
 ## Still Not Working?
 
@@ -130,11 +188,11 @@ If you don't hear "Hello, this is a test", Chrome's TTS isn't working.
 
 2. **Check Browser Compatibility:**
    - Make sure you're using Chrome (not Edge, Firefox, etc.)
-   - Web Speech API works best in Chrome
+   - Web Speech API and chrome.tts work best in Chrome
 
 3. **Check Extension Permissions:**
    - In `chrome://extensions/`, click "Details" on your extension
-   - Verify all permissions are enabled
+   - Verify all permissions are enabled: **tts**, **tabs**, **scripting**, **activeTab**, **storage**
 
 4. **Try Incognito Mode:**
    - Sometimes extensions work differently in incognito

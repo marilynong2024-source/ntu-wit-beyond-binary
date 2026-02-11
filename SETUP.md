@@ -61,7 +61,7 @@ The extension talks to a **local proxy** that uses **Google Gemini**. You need t
 2. Turn on **Developer mode** (top-right toggle)
 3. Click **Load unpacked**
 4. Select the **project root folder** (the folder that contains `manifest.json`, e.g. `ntu-wit-beyond-binary`)
-5. The extension should appear in your list. It requests: **tts**, **tabs**, **scripting**, **activeTab**, **storage** (and optional **desktopCapture** for screen capture).
+5. The extension should appear in your list. It requests: **tts**, **tabs**, **scripting**, **activeTab**, **storage** (and optional **desktopCapture**).
 
 ---
 
@@ -94,10 +94,6 @@ No API key is entered in the extension; the key lives only in `ai-proxy/.env`.
 - Check that `PROXY_BASE` in `scripts/background.js` is `http://localhost:3000` (or your proxy URL)
 - Try a fallback phrase like "open google" or "scroll down" to confirm the extension works
 
-### Image analysis fails
-- Proxy must be running (`npm start` in `ai-proxy`)
-- `GEMINI_API_KEY` must be set in `ai-proxy/.env`
-- Restart the proxy after changing `.env`
 
 ### Microphone not working / Start Listening does nothing
 - Use a **normal webpage** (e.g. google.com), not `chrome://` or the extension popup page. Refresh the page and try again.
@@ -121,6 +117,8 @@ No API key is entered in the extension; the key lives only in `ai-proxy/.env`.
 - [ ] Transcript appears when you speak; a command runs (e.g. "scroll down", "open google", "read this page")
 - [ ] Voice feedback (TTS) works if enabled in popup settings
 - [ ] **Option+Shift+R** (or **Alt+Shift+R**) reads the current page aloud
+- [ ] **Simplified Reading** button simplifies page layout for easier reading
+- [ ] **Target Size** controls increase/decrease click target sizes
 
 ---
 
@@ -130,6 +128,7 @@ No API key is entered in the extension; the key lives only in `ai-proxy/.env`.
 - Test on different sites (e.g. Wikipedia, Gmail)
 - Toggle **Enable voice feedback (TTS)** and **Continuous listening** in the popup settings
 - Use keyboard shortcuts: **Option+Shift+A**, **Option+Shift+R**, **Option+Shift+S**
+- Try accessibility tools: **Simplified Reading** and **Target Size** controls
 
 For more detail and troubleshooting, see **README.md** and **TROUBLESHOOTING.md**.
 
