@@ -1160,6 +1160,11 @@ if (typeof window.contentScriptInitialized === 'undefined') {
         return { message: `Size increased to ${percentage}%` };
     }
 
+    // Backward-compatible alias used by older parsed actions.
+    function enlargeClickTargets() {
+        return increaseTargetSize();
+    }
+
     // function decreaseTargetSize() {
     //     // Decrease by 0.2 (20%) each time, minimum 1.0 (100% - original)
     //     window.targetSizeLevel = Math.max(window.targetSizeLevel - 0.2, 1.0);

@@ -13,7 +13,8 @@ const COMMAND_SCHEMA = {
                 "OPEN_URL", "SCROLL", "CLICK", "SEARCH", "READ_PAGE",
                 "BACK", "FORWARD", "REFRESH", "CLICK_BUTTON",
                 "SCROLL_TOP", "SCROLL_BOTTOM", "DESCRIBE_PAGE",
-                "STOP_READING", "UNKNOWN"
+                "STOP_READING", "ENLARGE_TARGETS", "INCREASE_TARGET_SIZE",
+                "DECREASE_TARGET_SIZE", "UNKNOWN"
             ]
         },
         url: { type: "string" },
@@ -39,7 +40,7 @@ const SYSTEM_PROMPT = `You are an assistant that converts a spoken browser comma
   Follow this schema exactly:
   
   {
-    "action": "OPEN_URL | SCROLL | CLICK | SEARCH | READ_PAGE | BACK | FORWARD | REFRESH | CLICK_BUTTON | SCROLL_TOP | SCROLL_BOTTOM | DESCRIBE_PAGE | STOP_READING | UNKNOWN",
+    "action": "OPEN_URL | SCROLL | CLICK | SEARCH | READ_PAGE | BACK | FORWARD | REFRESH | CLICK_BUTTON | SCROLL_TOP | SCROLL_BOTTOM | DESCRIBE_PAGE | STOP_READING | ENLARGE_TARGETS | INCREASE_TARGET_SIZE | DECREASE_TARGET_SIZE | UNKNOWN",
     "url": string (only for OPEN_URL),
     "query": string (only for SEARCH),
     "direction": "up | down" (only for SCROLL),
@@ -63,6 +64,8 @@ const SYSTEM_PROMPT = `You are an assistant that converts a spoken browser comma
   - If the user asks to read the page, use READ_PAGE.
   - If the user asks to describe the page or what the page looks like, use DESCRIBE_PAGE.
   - If the user asks to stop reading, stop speaking, or pause reading, use STOP_READING.
+  - If the user asks for larger click targets, bigger buttons, bigger text, zoom in, or increase target size, use INCREASE_TARGET_SIZE.
+  - If the user asks for smaller click targets, smaller buttons, zoom out, or decrease target size, use DECREASE_TARGET_SIZE.
   - If you are not sure, return { "action": "UNKNOWN" }.`;
 
 // --------------------
@@ -114,6 +117,9 @@ function mapParsedToInternal(parsed) {
         SEARCH: (q) => q ? `Searching for ${q}` : 'Searching',
         READ_PAGE: () => 'Reading page content',
         STOP_READING: () => 'Stopping reading',
+        ENLARGE_TARGETS: () => 'Increasing target size',
+        INCREASE_TARGET_SIZE: () => 'Increasing target size',
+        DECREASE_TARGET_SIZE: () => 'Decreasing target size',
         BACK: () => 'Going back',
         FORWARD: () => 'Going forward',
         REFRESH: () => 'Refreshing page',
@@ -160,6 +166,11 @@ function mapParsedToInternal(parsed) {
             return { action: 'read_page', params: {}, message: getMessage('READ_PAGE') };
         case 'STOP_READING':
             return { action: 'stop_reading', params: {}, message: getMessage('STOP_READING') };
+        case 'ENLARGE_TARGETS':
+        case 'INCREASE_TARGET_SIZE':
+            return { action: 'increase_target_size', params: {}, message: getMessage(parsed.action) };
+        case 'DECREASE_TARGET_SIZE':
+            return { action: 'decrease_target_size', params: {}, message: getMessage('DECREASE_TARGET_SIZE') };
         case 'BACK':
             return { action: 'go_back', params: {}, message: getMessage('BACK') };
         case 'FORWARD':
@@ -252,8 +263,24 @@ function fallbackParse(text) {
             return { action: "SEARCH", query: searchMatch[1].trim() };
         }
     }
+    const wantsLargerTargets =
+        /increase\s+(the\s+)?(target|targets|button|buttons|click target)\s*size/.test(t) ||
+        /(?:larger|bigger)\s+(?:click\s+)?(?:target|targets|button|buttons|text)/.test(t) ||
+        /(?:target|targets|button|buttons|text)\s+(?:larger|bigger)/.test(t) ||
+        /zoom\s+in/.test(t);
+    if (wantsLargerTargets) {
+        return { action: "INCREASE_TARGET_SIZE" };
+    }
+    const wantsSmallerTargets =
+        /(?:decrease|reduce)\s+(the\s+)?(target|targets|button|buttons|click target)\s*size/.test(t) ||
+        /smaller\s+(?:click\s+)?(?:target|targets|button|buttons|text)/.test(t) ||
+        /(?:target|targets|button|buttons|text)\s+smaller/.test(t) ||
+        /zoom\s+out/.test(t);
+    if (wantsSmallerTargets) {
+        return { action: "DECREASE_TARGET_SIZE" };
+    }
     if (t.includes("larger") && (t.includes("target") || t.includes("button"))) {
-        return { action: "ENLARGE_TARGETS" };
+        return { action: "INCREASE_TARGET_SIZE" };
     }
     const openMatch = t.match(/open\s+(.+)/);
     if (openMatch && openMatch[1]) {
