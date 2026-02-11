@@ -4,11 +4,12 @@ An accessible Chrome extension for voice-controlled web browsing. Uses AI (Googl
 
 ## ✨ Features
 
-- **Voice input (STT)** – Web Speech API (browser-native)
-- **AI command understanding** – Natural language → browser actions via Gemini (local proxy)
-- **Action execution** – Scroll, click, open URLs, search, back/forward, refresh, read page, describe page
-- **Voice feedback (TTS)** – Optional spoken confirmation
-- **Image Explainer** – Upload or capture an image; get AI description and OCR (Gemini Vision)
+- **Voice input (STT)** – Web Speech API in the **content script** (page context) for reliable recognition; start from the popup’s **Start Listening** button.
+- **AI command understanding** – Natural language → browser actions via Gemini (local ai-proxy). When the proxy is unavailable, a built-in **fallback** handles common phrases.
+- **Action execution** – Scroll, click, open URLs, search, back/forward, refresh, **read page aloud** (TTS in background), describe page.
+- **Voice feedback (TTS)** – Optional spoken confirmations; **read page** uses Chrome’s `chrome.tts` in the background for reliable playback.
+- **Keyboard shortcuts** – **Option+Shift+A** (activate assistant), **Option+Shift+R** (read page aloud), **Option+Shift+S** (stop reading).
+- **Image Explainer** – Upload or capture an image; get AI description and OCR (Gemini Vision via ai-proxy).
 
 ### Supported commands
 
@@ -17,11 +18,11 @@ An accessible Chrome extension for voice-controlled web browsing. Uses AI (Googl
 | **Navigation** | "scroll down", "scroll up", "go to top", "go to bottom" |
 | **Browser** | "go back", "go forward", "refresh" |
 | **Interactions** | "click Submit", "click the login button" |
-| **Content** | "read this page", "read aloud", "describe the page" |
+| **Content** | "read this page", "read aloud", "read the page", "describe the page" |
 | **Search** | "search for cats", "google weather" |
 | **Open site** | "open google", "open youtube.com", "open wikipedia.org" |
 
-When the proxy is unavailable, a built-in fallback handles common phrases (e.g. "open google", "scroll down", "go back").
+When the proxy is unavailable, the built-in fallback handles common phrases (e.g. "open google", "scroll down", "go back", "read this page").
 
 ## 🚀 Installation
 
@@ -36,8 +37,9 @@ When the proxy is unavailable, a built-in fallback handles common phrases (e.g. 
 1. Clone or download this repo:
    ```bash
    git clone <repository-url>
-   cd ciazam
+   cd <project-folder>
    ```
+   Replace `<project-folder>` with the name of the cloned directory (e.g. `ntu-wit-beyond-binary`).
 
 2. **Icons** – Ensure these exist in `icons/`:
    - `icons/icon16.png` (16×16)
@@ -47,7 +49,7 @@ When the proxy is unavailable, a built-in fallback handles common phrases (e.g. 
 3. **Load in Chrome**
    - Open `chrome://extensions/`
    - Turn on **Developer mode**
-   - Click **Load unpacked** and select the `ciazam` folder (the one with `manifest.json`)
+   - Click **Load unpacked** and select the **project root folder** (the one containing `manifest.json`)
 
 ### 2. AI proxy (required for AI commands and image analysis)
 
@@ -76,12 +78,18 @@ When the proxy is unavailable, a built-in fallback handles common phrases (e.g. 
 
 ### Voice commands
 
-1. Click the extension icon.
-2. Click **Start Listening**.
-3. Say a command (e.g. "scroll down", "open google", "click Submit").
-4. The extension speaks back the action (if TTS is on) and runs it on the current tab.
+1. Open a **normal webpage** (e.g. google.com). Voice recognition runs in the page context; `chrome://` and extension pages are not supported.
+2. Click the extension icon, then **Start Listening** (or use **Option+Shift+A** to activate the assistant first).
+3. Say a command (e.g. "scroll down", "open google", "read this page").
+4. The extension runs the action on the current tab and can speak back (if TTS is on). **Read page** is spoken via the background (Chrome TTS).
 
-You can also type in the transcript area and trigger the same flow where supported.
+**Keyboard shortcuts (any focused tab):**
+
+| Shortcut | Action |
+|----------|--------|
+| **Option+Shift+A** (Mac) / **Alt+Shift+A** (Win/Linux) | Activate assistant (speaks confirmation) |
+| **Option+Shift+R** / **Alt+Shift+R** | Read page aloud |
+| **Option+Shift+S** / **Alt+Shift+S** | Stop reading |
 
 ### Image Explainer
 
@@ -95,24 +103,24 @@ Image analysis goes through the proxy; ensure it’s running and `GEMINI_API_KEY
 ### Settings (popup)
 
 - **Enable voice feedback (TTS)** – Turn spoken confirmations on or off.
-- **Enable wake word ("Hey Assist")** – Reserved for future use.
+- **Continuous listening** – After each command, automatically start listening again (optional).
 
 ## 🏗️ Architecture
 
 ### Layout
 
 ```
-ciazam/
-├── manifest.json           # Extension manifest
+<project-root>/
+├── manifest.json           # Extension manifest (permissions: tts, tabs, scripting, activeTab, storage)
 ├── popup/
 │   ├── popup.html
 │   ├── popup.css
-│   └── popup.js            # STT, TTS, UI, image upload/capture
+│   └── popup.js            # UI, message to content/background, image upload/capture
 ├── scripts/
-│   ├── background.js       # Service worker: proxy calls, message routing
-│   └── content.js          # Injected script: scroll, click, read, etc.
+│   ├── background.js       # Service worker: EXECUTE_COMMAND, AI_PARSE, read_page TTS, keyboard commands
+│   └── content.js          # Injected script: speech recognition, scroll, click, read page text, etc.
 ├── utils/
-│   └── commands.js         # Command schema, AI prompt, fallback parsing
+│   └── command.js          # mapParsedToInternal, fallbackParse (used by background)
 ├── icons/
 │   └── icon16.png, icon48.png, icon128.png
 └── ai-proxy/               # Local Node server (Gemini)
@@ -123,10 +131,11 @@ ciazam/
 
 ### Flow
 
-1. **Voice** → Popup (Web Speech API) → transcript.
-2. **Transcript** → Background script → proxy `POST /parse` (Gemini) → command JSON.
-3. **Command** → Content script (or tab navigation) → action on the page.
-4. **Feedback** → Optional TTS in popup.
+1. **Start Listening** (popup) → Popup sends `startSpeechRecognition` to the **content script** on the active tab. Content script runs Web Speech API and returns transcript (or handles simple commands locally).
+2. **Transcript** → Popup sends `EXECUTE_COMMAND` (with fallback-parsed command) or `AI_PARSE_COMMAND` → background; background may call ai-proxy for AI parsing, then runs the mapped command.
+3. **Read page** → Background sends `executeAction`/`read_page` to content; content returns page text; background uses `chrome.tts` to speak it.
+4. **Other actions** → Background forwards to content script (`executeAction`) or handles in background (e.g. tab navigation).
+5. **Feedback** → Optional TTS in popup; read-page TTS in background.
 
 **Image analysis:** Popup sends image to background → proxy `POST /vision` (Gemini) → description + OCR shown in popup.
 
@@ -137,14 +146,15 @@ ciazam/
 
 ## 🔧 Configuration
 
-- **Proxy base URL** – In `scripts/background.js`, `PROXY_BASE` defaults to `http://localhost:3000`. Change it if your proxy runs elsewhere.
+- **Proxy URL** – The ai-proxy runs at `http://localhost:3000` by default. If you run it elsewhere, update the URL where the extension calls the proxy (e.g. in `scripts/background.js` or the code that sends requests to `/parse` or `/vision`).
 - **Gemini key** – Only in `ai-proxy/.env`; the extension never sees the key.
 
 ### Permissions
 
-- `activeTab`, `tabs`, `storage`, `scripting` – core extension and tab control.
+- `tts` – Read page aloud from the background.
+- `activeTab`, `tabs`, `storage`, `scripting` – core extension, tab control, and settings/history.
 - `host_permissions` – for proxy and general web access.
-- Optional: `desktopCapture` – for image capture in the popup.
+- Optional: `desktopCapture` – for Image Explainer screen capture in the popup.
 
 ## 🧪 Testing
 
@@ -156,9 +166,9 @@ ciazam/
 
 | Issue | What to check |
 |-------|----------------|
-| **Commands do nothing or "UNKNOWN"** | Proxy running? `npm start` in `ai-proxy`. Correct `PROXY_BASE` in `background.js`. |
+| **Commands do nothing or "UNKNOWN"** | Proxy running? `npm start` in `ai-proxy`. Check that the extension uses the correct proxy URL. |
 | **Image analysis fails** | Proxy running? `GEMINI_API_KEY` in `ai-proxy/.env`? Popup message often suggests checking proxy and key. |
-| **No voice recognition** | Microphone allowed for the extension? Using Chrome (not another browser)? |
+| **No voice recognition / Start Listening does nothing** | Open a normal webpage (not `chrome://`). Refresh the page and try again. Allow microphone when prompted. Check that the extension has the **storage** permission (reload extension after updating). |
 | **Actions don’t run on page** | Are you on a normal webpage? Some sites restrict or block content scripts. |
 
 ## 🔒 Privacy and security
@@ -177,8 +187,7 @@ MIT – use and modify as you like.
 - Wake word ("Hey Assist")
 - Multi-language support
 - Custom commands
-- Keyboard shortcut to open popup or start listening
-- Offline fallback for simple commands
+- Offline fallback for simple commands (fallback already covers many phrases)
 
 ---
 
