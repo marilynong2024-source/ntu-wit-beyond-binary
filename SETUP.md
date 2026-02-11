@@ -29,7 +29,7 @@ Before loading the extension, create icon files in `icons/`:
 
 ## Step 2: Set Up the AI Proxy
 
-The extension talks to a **local proxy** that uses **Google Gemini**. You need the proxy running for AI commands and image analysis.
+The extension talks to a **local proxy** that uses **Google Gemini**. You need the proxy running for AI commands.
 
 1. **Get a Gemini API key**
    - Go to https://aistudio.google.com/apikey
@@ -70,7 +70,7 @@ The extension talks to a **local proxy** that uses **Google Gemini**. You need t
 1. **Open a normal webpage** (e.g. google.com). Voice recognition runs in the page; it does not work on `chrome://` or the New Tab page.
 2. Click the extension icon in the toolbar.
 3. **Microphone**: When you click **Start Listening**, Chrome may ask for microphone access; click **Allow**.
-4. **Proxy**: For full AI command parsing and Image Explainer, run the ai-proxy (`npm start` in `ai-proxy`). Without it, the built-in fallback still handles many commands (e.g. "open google", "scroll down", "read this page").
+4. **Proxy**: For full AI command parsing, run the ai-proxy (`npm start` in `ai-proxy`). Without it, the built-in fallback still handles many commands (e.g. "open google", "scroll down", "read this page").
 5. Say a command (e.g. "scroll down", "open google", "read this page") and check that the action runs and you hear/see the response.
 
 **Keyboard shortcuts (from any tab):**
@@ -121,7 +121,6 @@ No API key is entered in the extension; the key lives only in `ai-proxy/.env`.
 - [ ] Transcript appears when you speak; a command runs (e.g. "scroll down", "open google", "read this page")
 - [ ] Voice feedback (TTS) works if enabled in popup settings
 - [ ] **Option+Shift+R** (or **Alt+Shift+R**) reads the current page aloud
-- [ ] Image Explainer: upload/capture image and **Analyze Image** returns description/OCR (proxy must be running)
 
 ---
 
@@ -129,7 +128,6 @@ No API key is entered in the extension; the key lives only in `ai-proxy/.env`.
 
 - Try more commands (see **README.md** for the full list)
 - Test on different sites (e.g. Wikipedia, Gmail)
-- Use **Image Explainer** with upload or Capture Screen (proxy required)
 - Toggle **Enable voice feedback (TTS)** and **Continuous listening** in the popup settings
 - Use keyboard shortcuts: **Option+Shift+A**, **Option+Shift+R**, **Option+Shift+S**
 

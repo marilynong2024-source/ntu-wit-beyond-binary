@@ -208,56 +208,6 @@ function setupEventListeners() {
         }
     });
 
-    document.getElementById('uploadImageBtn').addEventListener('click', () => {
-        document.getElementById('imageInput').click();
-    });
-
-    document.getElementById('imageInput').addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            displayImagePreview(file);
-        }
-    });
-
-    document.getElementById('captureScreenBtn').addEventListener('click', async () => {
-        try {
-            const stream = await navigator.mediaDevices.getDisplayMedia({
-                video: { mediaSource: 'screen' },
-                audio: false
-            });
-
-            const video = document.createElement('video');
-            video.srcObject = stream;
-            video.play();
-
-            video.addEventListener('loadedmetadata', () => {
-                const canvas = document.createElement('canvas');
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(video, 0, 0);
-
-                canvas.toBlob((blob) => {
-                    displayImagePreview(blob);
-                    stream.getTracks().forEach(track => track.stop());
-                }, 'image/png');
-            });
-        } catch (error) {
-            if (error.name === 'NotAllowedError') {
-                alert('Screen capture permission denied. Please allow screen sharing.');
-            } else {
-                alert('Screen capture cancelled or failed: ' + error.message);
-            }
-        }
-    });
-
-    document.getElementById('analyzeImageBtn').addEventListener('click', async () => {
-        const previewImg = document.getElementById('previewImg');
-        if (previewImg.src) {
-            await analyzeImage(previewImg.src);
-        }
-    });
-
     // Pause/Resume button handler
     const pauseResumeBtn = document.getElementById('pauseResumeBtn');
     if (pauseResumeBtn) {
@@ -521,53 +471,6 @@ function loadCommandHistory() {
     });
 }
 
-function displayImagePreview(fileOrBlob) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const previewImg = document.getElementById('previewImg');
-        previewImg.src = e.target.result;
-        document.getElementById('imagePreview').style.display = 'block';
-    };
-
-    if (fileOrBlob instanceof Blob) {
-        reader.readAsDataURL(fileOrBlob);
-    } else {
-        reader.readAsDataURL(fileOrBlob);
-    }
-}
-
-async function analyzeImage(imageDataUrl) {
-    updateStatus('processing', 'Analyzing image...');
-    document.getElementById('analyzeImageBtn').disabled = true;
-
-    try {
-        const response = await chrome.runtime.sendMessage({
-            type: 'analyzeImage',
-            imageData: imageDataUrl
-        });
-
-        if (response && response.analysis) {
-            document.getElementById('analysisContent').textContent = response.analysis;
-            document.getElementById('imageAnalysis').style.display = 'block';
-
-            if (document.getElementById('enableTTS').checked) {
-                speak(response.analysis);
-            }
-        } else {
-            throw new Error('No analysis received');
-        }
-    } catch (error) {
-        const msg = error?.message || String(error);
-        alert(
-            msg.includes('Proxy') || msg.includes('fetch')
-                ? 'Image analysis failed. Is the proxy running? (npm start in ai-proxy). Set GEMINI_API_KEY in ai-proxy/.env'
-                : 'Error analyzing image. Check the proxy and GEMINI_API_KEY in ai-proxy/.env'
-        );
-    } finally {
-        updateStatus('ready', 'Ready to listen');
-        document.getElementById('analyzeImageBtn').disabled = false;
-    }
-}
 
 async function tryContentScriptRecognition() {
     try {

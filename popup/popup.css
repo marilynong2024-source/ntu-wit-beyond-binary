@@ -333,55 +333,6 @@ section h2 {
     cursor: pointer;
 }
 
-/* Image Section */
-.image-section {
-    background: #f8f9fa;
-    padding: 16px;
-    border-radius: 12px;
-}
-
-.image-upload-area {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 16px;
-}
-
-.image-upload-area .secondary-btn {
-    flex: 1;
-}
-
-.image-preview {
-    margin-bottom: 16px;
-}
-
-.image-preview img {
-    width: 100%;
-    max-height: 200px;
-    object-fit: contain;
-    border-radius: 8px;
-    margin-bottom: 12px;
-    border: 2px solid #e0e0e0;
-}
-
-.image-analysis {
-    background: white;
-    padding: 12px;
-    border-radius: 8px;
-    margin-top: 12px;
-}
-
-.image-analysis h3 {
-    font-size: 16px;
-    margin-bottom: 8px;
-    color: #333;
-}
-
-#analysisContent {
-    font-size: 14px;
-    color: #555;
-    line-height: 1.6;
-    white-space: pre-wrap;
-}
 
 /* Accessibility Features Section */
 .accessibility-section {

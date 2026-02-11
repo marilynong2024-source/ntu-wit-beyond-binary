@@ -1,6 +1,6 @@
 # 🎤 AI Voice Assistant – Chrome Extension
 
-An accessible Chrome extension for voice-controlled web browsing. Uses AI (Google Gemini via a local proxy) to understand spoken or typed commands and control the browser. Includes an **Image Explainer** for descriptions and text extraction (OCR). Built for accessibility.
+An accessible Chrome extension for voice-controlled web browsing. Uses AI (Google Gemini via a local proxy) to understand spoken or typed commands and control the browser. Built for accessibility.
 
 ## ✨ Features
 
@@ -9,7 +9,6 @@ An accessible Chrome extension for voice-controlled web browsing. Uses AI (Googl
 - **Action execution** – Scroll, click, open URLs, search, back/forward, refresh, **read page aloud** (TTS in background), describe page.
 - **Voice feedback (TTS)** – Optional spoken confirmations; **read page** uses Chrome’s `chrome.tts` in the background for reliable playback.
 - **Keyboard shortcuts** – **Option+Shift+A** (activate assistant), **Option+Shift+R** (read page aloud), **Option+Shift+S** (stop reading).
-- **Image Explainer** – Upload or capture an image; get AI description and OCR (Gemini Vision via ai-proxy).
 
 ### Supported commands
 
@@ -51,7 +50,7 @@ When the proxy is unavailable, the built-in fallback handles common phrases (e.g
    - Turn on **Developer mode**
    - Click **Load unpacked** and select the **project root folder** (the one containing `manifest.json`)
 
-### 2. AI proxy (required for AI commands and image analysis)
+### 2. AI proxy (required for AI commands)
 
 1. Go to the proxy directory:
    ```bash
@@ -91,14 +90,6 @@ When the proxy is unavailable, the built-in fallback handles common phrases (e.g
 | **Option+Shift+R** / **Alt+Shift+R** | Read page aloud |
 | **Option+Shift+S** / **Alt+Shift+S** | Stop reading |
 
-### Image Explainer
-
-1. Click the extension icon and scroll to **Image Explainer**.
-2. **Upload Image** – choose a file, or **Capture Screen** – use camera/screen capture.
-3. Click **Analyze Image**.
-4. View the description and any extracted text.
-
-Image analysis goes through the proxy; ensure it’s running and `GEMINI_API_KEY` is set in `ai-proxy/.env`.
 
 ### Settings (popup)
 
@@ -115,7 +106,7 @@ Image analysis goes through the proxy; ensure it’s running and `GEMINI_API_KEY
 ├── popup/
 │   ├── popup.html
 │   ├── popup.css
-│   └── popup.js            # UI, message to content/background, image upload/capture
+│   └── popup.js            # UI, message to content/background
 ├── scripts/
 │   ├── background.js       # Service worker: EXECUTE_COMMAND, AI_PARSE, read_page TTS, keyboard commands
 │   └── content.js          # Injected script: speech recognition, scroll, click, read page text, etc.
@@ -124,7 +115,7 @@ Image analysis goes through the proxy; ensure it’s running and `GEMINI_API_KEY
 ├── icons/
 │   └── icon16.png, icon48.png, icon128.png
 └── ai-proxy/               # Local Node server (Gemini)
-    ├── server.js           # POST /parse, POST /vision
+    ├── server.js           # POST /parse
     ├── package.json
     └── .env                # GEMINI_API_KEY (create this)
 ```
@@ -137,16 +128,14 @@ Image analysis goes through the proxy; ensure it’s running and `GEMINI_API_KEY
 4. **Other actions** → Background forwards to content script (`executeAction`) or handles in background (e.g. tab navigation).
 5. **Feedback** → Optional TTS in popup; read-page TTS in background.
 
-**Image analysis:** Popup sends image to background → proxy `POST /vision` (Gemini) → description + OCR shown in popup.
-
 ### APIs
 
-- **Google Gemini** (via ai-proxy): command parsing (`/parse`), image analysis (`/vision`).
+- **Google Gemini** (via ai-proxy): command parsing (`/parse`).
 - **Web Speech API**: speech recognition and synthesis (no key).
 
 ## 🔧 Configuration
 
-- **Proxy URL** – The ai-proxy runs at `http://localhost:3000` by default. If you run it elsewhere, update the URL where the extension calls the proxy (e.g. in `scripts/background.js` or the code that sends requests to `/parse` or `/vision`).
+- **Proxy URL** – The ai-proxy runs at `http://localhost:3000` by default. If you run it elsewhere, update the URL where the extension calls the proxy (e.g. in `scripts/background.js` or the code that sends requests to `/parse`).
 - **Gemini key** – Only in `ai-proxy/.env`; the extension never sees the key.
 
 ### Permissions
@@ -154,20 +143,17 @@ Image analysis goes through the proxy; ensure it’s running and `GEMINI_API_KEY
 - `tts` – Read page aloud from the background.
 - `activeTab`, `tabs`, `storage`, `scripting` – core extension, tab control, and settings/history.
 - `host_permissions` – for proxy and general web access.
-- Optional: `desktopCapture` – for Image Explainer screen capture in the popup.
 
 ## 🧪 Testing
 
 - Use on normal web pages (e.g. Wikipedia, Gmail, news sites). `chrome://` pages are not supported.
 - Try: "scroll down", "go back", "open google", "read this page", "click [button label]".
-- For image analysis, start the proxy and use **Analyze Image** after uploading or capturing.
 
 ## 🐛 Troubleshooting
 
 | Issue | What to check |
 |-------|----------------|
 | **Commands do nothing or "UNKNOWN"** | Proxy running? `npm start` in `ai-proxy`. Check that the extension uses the correct proxy URL. |
-| **Image analysis fails** | Proxy running? `GEMINI_API_KEY` in `ai-proxy/.env`? Popup message often suggests checking proxy and key. |
 | **No voice recognition / Start Listening does nothing** | Open a normal webpage (not `chrome://`). Refresh the page and try again. Allow microphone when prompted. Check that the extension has the **storage** permission (reload extension after updating). |
 | **Actions don’t run on page** | Are you on a normal webpage? Some sites restrict or block content scripts. |
 
@@ -175,7 +161,7 @@ Image analysis goes through the proxy; ensure it’s running and `GEMINI_API_KEY
 
 - **Gemini API key** – Stored only in `ai-proxy/.env` on your machine; the extension does not read it.
 - **Voice** – Processed by the browser’s Web Speech API (handled by Chrome).
-- **Commands and images** – Sent from your browser to your local proxy, then to Google Gemini; not stored by the extension beyond the session.
+- **Commands** – Sent from your browser to your local proxy, then to Google Gemini; not stored by the extension beyond the session.
 - **No tracking** – The extension does not track or analytics.
 
 ## 📝 License

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Accessibility Extension",
   "version": "1.0.1",
-  "description": "AI-powered voice-controlled interface for accessible web browsing with image explanation capabilities",
+  "description": "AI-powered voice-controlled interface for accessible web browsing",
   "permissions": ["tts", "tabs", "scripting", "activeTab", "storage"],
   "optional_permissions": [
     "desktopCapture"
