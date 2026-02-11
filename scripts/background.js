@@ -1,4 +1,4 @@
-importScripts('../utils/command.js');
+importScripts('../utils/commands.js');
 
 let ttsChunks = [];
 let ttsIndex = 0;
@@ -56,6 +56,15 @@ function ffTts() {
 function rwTts() {
   if (!ttsIsReading) return;
   speakChunkAt(Math.max(ttsIndex - 1, 0));
+}
+
+function persistAssistantResponse(responseText) {
+  if (!responseText) return;
+  chrome.storage.local.set({
+    lastAssistantResponse: responseText,
+    lastVoiceProcessing: false,
+    lastVoiceUpdatedAt: new Date().toISOString()
+  }, () => {});
 }
 
 async function executeMappedCommand(mapped) {
@@ -137,9 +146,14 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     console.log('[BACKGROUND DEBUG] Mapped command:', mapped);
     executeMappedCommand(mapped).then((result) => {
       console.log('[BACKGROUND DEBUG] executeMappedCommand result:', result?.message, 'action:', result?.action);
+      const responseText = result?.description
+        ? `${result.message || 'Done'}\n\n${result.description}`
+        : (result?.message || result?.error || '');
+      persistAssistantResponse(responseText);
       sendResponse(result);
     }).catch(e => {
       console.error('[BACKGROUND DEBUG] executeMappedCommand error:', e);
+      persistAssistantResponse(`Error: ${e.message || 'failed to execute command'}`);
       sendResponse({ error: e.message });
     });
     return true;

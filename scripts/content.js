@@ -588,10 +588,19 @@ if (typeof window.contentScriptInitialized === 'undefined') {
             window.contentRecognition.onresult = (event) => {
                 const transcript = event.results[0][0].transcript;
                 console.log('[CONTENT DEBUG] Speech result transcript:', transcript);
-                processCommandLocally(transcript);
+                const localResult = processCommandLocally(transcript);
+                const handledLocally = Boolean(localResult?.handled);
+                const localMessage = handledLocally
+                    ? (localResult.message || 'Done.')
+                    : 'Processing command...';
+
+                persistVoicePanels(transcript, localMessage, !handledLocally);
+
                 chrome.runtime.sendMessage({
                     type: 'speechRecognitionResult',
-                    transcript: transcript
+                    transcript: transcript,
+                    handledLocally,
+                    localMessage: handledLocally ? localMessage : undefined
                 }).catch(() => {});
             };
 
@@ -621,6 +630,25 @@ if (typeof window.contentScriptInitialized === 'undefined') {
             console.error('[CONTENT] Speech recognition not supported');
             return { success: false, error: 'Speech recognition not supported in this browser' };
         }
+    }
+
+    function persistVoicePanels(command, response, isProcessing) {
+        const payload = {
+            lastVoiceProcessing: Boolean(isProcessing),
+            lastVoiceUpdatedAt: new Date().toISOString()
+        };
+        if (typeof command === 'string') {
+            payload.lastVoiceCommand = command;
+        }
+        if (typeof response === 'string') {
+            payload.lastAssistantResponse = response;
+        }
+
+        chrome.storage.local.set(payload, () => {
+            if (chrome.runtime.lastError) {
+                console.warn('[CONTENT] Could not persist voice panel state:', chrome.runtime.lastError.message);
+            }
+        });
     }
 
     async function executeActionOnPage(action, params = {}) {
@@ -969,43 +997,48 @@ if (typeof window.contentScriptInitialized === 'undefined') {
                     console.error('[CONTENT] Error in speakInPage:', e);
                 }
             }
+            return { handled: true, message: result.message || 'Reading page aloud.' };
         }
         // Handle stop reading commands
         else if (text.includes("stop reading") || text.includes("stop speaking") || text.includes("pause reading") ||
                  text.includes("stop read") || text.includes("stop the reading") || text.includes("cancel reading")) {
             console.log('[CONTENT DEBUG] processCommandLocally: stop-reading branch');
             stopReadingCompletely();
+            return { handled: true, message: 'Stopped reading.' };
         }
         // Handle scroll commands
         else if (text.includes("scroll down")) {
             window.scrollBy({ top: 300, behavior: 'smooth' });
+            return { handled: true, message: 'Scrolling down' };
         }
         else if (text.includes("scroll up")) {
             window.scrollBy({ top: -300, behavior: 'smooth' });
+            return { handled: true, message: 'Scrolling up' };
         }
         else if (text.includes("go to top") || text.includes("scroll to top")) {
             window.scrollTo({ top: 0, behavior: 'smooth' });
+            return { handled: true, message: 'Scrolling to top' };
         }
         else if (text.includes("go to bottom") || text.includes("scroll to bottom")) {
             window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+            return { handled: true, message: 'Scrolling to bottom' };
         }
         // Handle navigation
         else if (text.includes("go back") || text.includes("back")) {
             window.history.back();
+            return { handled: true, message: 'Going back' };
         }
         else if (text.includes("go forward") || text.includes("forward")) {
             window.history.forward();
+            return { handled: true, message: 'Going forward' };
         }
         else if (text.includes("refresh") || text.includes("reload")) {
             window.location.reload();
+            return { handled: true, message: 'Refreshing page' };
         }
         else {
-            console.log('[CONTENT DEBUG] processCommandLocally: forwarding to background (speechRecognitionResult)');
-            // For complex commands, try background script
-            chrome.runtime.sendMessage({
-                type: 'speechRecognitionResult',
-                transcript: transcript
-            }).catch(() => {});
+            console.log('[CONTENT DEBUG] processCommandLocally: not handled locally');
+            return { handled: false };
         }
     }
 
