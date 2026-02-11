@@ -1,1 +1,37 @@
-ai-proxy/.env
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temporary files
+*.tmp
+*.temp
+
+# Package files (if you add any later)
+node_modules/
+package-lock.json
+yarn.lock
+
+# API keys (if stored in files - though we use Chrome storage)
+.env
+.env.local
+config.json
+
+# Build files
+dist/
+build/
+
+# Extension packaging
+*.crx
+*.pem
+*.zip
