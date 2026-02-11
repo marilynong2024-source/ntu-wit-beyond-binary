@@ -1,5 +1,7 @@
 # Quick Setup Guide
 
+This guide gets the **AI Voice Assistant** Chrome extension and its **ai-proxy** (Gemini) running on your machine.
+
 ## Step 1: Create Icons
 
 Before loading the extension, create icon files in `icons/`:
@@ -58,17 +60,24 @@ The extension talks to a **local proxy** that uses **Google Gemini**. You need t
 1. Open Chrome and go to `chrome://extensions/`
 2. Turn on **Developer mode** (top-right toggle)
 3. Click **Load unpacked**
-4. Select the **ciazam** folder (the one that contains `manifest.json`)
-5. The extension should appear in your list
+4. Select the **project root folder** (the folder that contains `manifest.json`, e.g. `ntu-wit-beyond-binary`)
+5. The extension should appear in your list. It requests: **tts**, **tabs**, **scripting**, **activeTab**, **storage** (and optional **desktopCapture** for screen capture).
 
 ---
 
 ## Step 4: First Use
 
-1. Click the extension icon in the toolbar
-2. **Microphone**: When you click **Start Listening**, Chrome will ask for microphone access; click **Allow**
-3. **Proxy**: Make sure the ai-proxy is running (`npm start` in `ai-proxy`). Without it, only the built-in fallback commands work (e.g. "open google", "scroll down")
-4. Say a command (e.g. "scroll down" or "open google") and check that the action runs and you hear/see the response
+1. **Open a normal webpage** (e.g. google.com). Voice recognition runs in the page; it does not work on `chrome://` or the New Tab page.
+2. Click the extension icon in the toolbar.
+3. **Microphone**: When you click **Start Listening**, Chrome may ask for microphone access; click **Allow**.
+4. **Proxy**: For full AI command parsing and Image Explainer, run the ai-proxy (`npm start` in `ai-proxy`). Without it, the built-in fallback still handles many commands (e.g. "open google", "scroll down", "read this page").
+5. Say a command (e.g. "scroll down", "open google", "read this page") and check that the action runs and you hear/see the response.
+
+**Keyboard shortcuts (from any tab):**
+
+- **Option+Shift+A** (Mac) / **Alt+Shift+A** (Win/Linux) – Activate assistant
+- **Option+Shift+R** / **Alt+Shift+R** – Read page aloud
+- **Option+Shift+S** / **Alt+Shift+S** – Stop reading
 
 No API key is entered in the extension; the key lives only in `ai-proxy/.env`.
 
@@ -90,36 +99,40 @@ No API key is entered in the extension; the key lives only in `ai-proxy/.env`.
 - `GEMINI_API_KEY` must be set in `ai-proxy/.env`
 - Restart the proxy after changing `.env`
 
-### Microphone not working
-- Allow microphone when Chrome prompts
-- Check Chrome: Settings → Privacy and security → Site settings → Microphone
-- Reload the extension and try again
+### Microphone not working / Start Listening does nothing
+- Use a **normal webpage** (e.g. google.com), not `chrome://` or the extension popup page. Refresh the page and try again.
+- Allow microphone when Chrome prompts.
+- Check Chrome: Settings → Privacy and security → Site settings → Microphone; allow the extension if listed.
+- Ensure the extension has the **storage** permission (see manifest). Reload the extension at `chrome://extensions/` and try again.
 
 ### Actions don’t run on the page
-- Use a normal webpage (not `chrome://` or the New Tab page)
-- Some sites restrict content scripts; try another site
+- Use a normal webpage (not `chrome://` or the New Tab page).
+- Some sites restrict content scripts; try another site.
 
 ---
 
 ## Testing Checklist
 
 - [ ] Icons in place (`icons/icon16.png`, `icon48.png`, `icon128.png`)
-- [ ] Extension loads without errors at `chrome://extensions/`
+- [ ] Extension loads without errors at `chrome://extensions/` (permissions include **storage** and **tts**)
 - [ ] `ai-proxy/.env` has `GEMINI_API_KEY`
-- [ ] Proxy starts: `cd ai-proxy && npm start`
-- [ ] Microphone permission granted when clicking **Start Listening**
-- [ ] Transcript appears when you speak
-- [ ] A command runs (e.g. "scroll down" or "open google")
-- [ ] Voice feedback (TTS) works if enabled
-- [ ] Image Explainer: upload/capture image and **Analyze Image** returns description/OCR
+- [ ] Proxy starts: `cd ai-proxy && npm start` (optional for fallback commands)
+- [ ] On a normal webpage, microphone permission granted when clicking **Start Listening**
+- [ ] Transcript appears when you speak; a command runs (e.g. "scroll down", "open google", "read this page")
+- [ ] Voice feedback (TTS) works if enabled in popup settings
+- [ ] **Option+Shift+R** (or **Alt+Shift+R**) reads the current page aloud
+- [ ] Image Explainer: upload/capture image and **Analyze Image** returns description/OCR (proxy must be running)
 
 ---
 
 ## Next Steps
 
-- Try more commands (see README for the full list)
+- Try more commands (see **README.md** for the full list)
 - Test on different sites (e.g. Wikipedia, Gmail)
-- Use Image Explainer with upload or Capture Screen
-- Toggle **Enable voice feedback (TTS)** in the popup settings
+- Use **Image Explainer** with upload or Capture Screen (proxy required)
+- Toggle **Enable voice feedback (TTS)** and **Continuous listening** in the popup settings
+- Use keyboard shortcuts: **Option+Shift+A**, **Option+Shift+R**, **Option+Shift+S**
+
+For more detail and troubleshooting, see **README.md** and **TROUBLESHOOTING.md**.
 
 Happy hacking! 🚀

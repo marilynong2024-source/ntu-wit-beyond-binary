@@ -5,12 +5,14 @@ let synth = window.speechSynthesis;
 let lastReadPageTabId = null;
 
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('[POPUP] DOMContentLoaded - setting up listeners');
     initializeSpeechRecognition();
     loadSettings();
     loadCommandHistory();
     setupEventListeners();
     checkMicrophonePermission();
     setupMessageListener();
+    console.log('[POPUP] Message listener setup complete');
 
     chrome.storage.local.get(['enableContinuousListening'], (result) => {
         if (result.enableContinuousListening) {
@@ -25,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function setupMessageListener() {
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        console.log('[POPUP DEBUG] Message received:', message.type, message);
         if (message.type === 'speechRecognitionResult') {
             handleSpeechResult(message.transcript);
         } else if (message.type === 'speechRecognitionError') {
@@ -158,10 +161,19 @@ function initializeSpeechRecognition() {
 
 function setupEventListeners() {
     document.getElementById('listenBtn').addEventListener('click', async () => {
+        console.log('[POPUP DEBUG] Start Listening clicked, isListening:', isListening);
         if (!isListening) {
+            // Immediate feedback so user sees something even if popup loses focus
+            updateStatus('listening', 'Starting...');
+            document.getElementById('listenBtnText').textContent = 'Starting...';
+            document.getElementById('listenBtn').disabled = true;
+
             const contentSuccess = await tryContentScriptRecognition();
+            console.log('[POPUP DEBUG] tryContentScriptRecognition result:', contentSuccess);
             if (!contentSuccess) {
                 updateStatus('error', 'Could not start voice recognition');
+                document.getElementById('listenBtnText').textContent = 'Start Listening';
+                document.getElementById('listenBtn').disabled = false;
                 document.getElementById('response').textContent =
                     '⚠️ Could not start voice recognition.\n\n' +
                     'Possible reasons:\n' +
@@ -173,6 +185,11 @@ function setupEventListeners() {
                     '2. Refresh the page\n' +
                     '3. Click "Start Listening" again';
                 document.getElementById('responseBox').style.display = 'block';
+            } else {
+                // Content script accepted; show listening state (in case status message is delayed or lost)
+                isListening = true;
+                updateStatus('listening', 'Listening...');
+                document.getElementById('listenBtnText').textContent = 'Listening...';
             }
         }
     });
@@ -289,6 +306,58 @@ function setupEventListeners() {
             }).catch(() => { });
         });
     }
+    // MOTOR IMPAIRMENTS - ZOOM IN/OUT
+
+    document.getElementById('increaseTargetsBtn').addEventListener('click', async () => {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab?.id) return;
+
+        try {
+            const result = await chrome.tabs.sendMessage(tab.id, {
+                type: 'executeAction',
+                action: 'increase_target_size'
+            });
+
+            document.getElementById('response').textContent = result.message || 'Size increased';
+            document.getElementById('responseBox').style.display = 'block';
+        } catch (e) {
+            alert('Please refresh the page and try again');
+        }
+    });
+
+    // document.getElementById('decreaseTargetsBtn').addEventListener('click', async () => {
+    //     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    //     if (!tab?.id) return;
+
+    //     try {
+    //         const result = await chrome.tabs.sendMessage(tab.id, {
+    //             type: 'executeAction',
+    //             action: 'decrease_target_size'
+    //         });
+
+    //         document.getElementById('response').textContent = result.message || 'Size decreased';
+    //         document.getElementById('responseBox').style.display = 'block';
+    //     } catch (e) {
+    //         alert('Please refresh the page and try again');
+    //     }
+    // });
+
+    document.getElementById('decreaseTargetsBtn').addEventListener('click', async () => {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab?.id) return;
+    
+        try {
+            const result = await chrome.tabs.sendMessage(tab.id, {
+                type: 'executeAction',
+                action: 'decrease_target_size'
+            });
+            
+            document.getElementById('response').textContent = result.message || 'Size decreased';
+            document.getElementById('responseBox').style.display = 'block';
+        } catch (e) {
+            alert('Please refresh the page and try again');
+        }
+    });
 }
 
 function updateStatus(state, text) {
@@ -414,7 +483,11 @@ async function analyzeImage(imageDataUrl) {
 async function tryContentScriptRecognition() {
     try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (!tab || !tab.id) return false;
+        console.log('[POPUP DEBUG] Active tab:', tab?.id, tab?.url);
+        if (!tab || !tab.id) {
+            console.warn('[POPUP DEBUG] No active tab');
+            return false;
+        }
 
         if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://'))) {
             document.getElementById('response').textContent =
@@ -425,45 +498,75 @@ async function tryContentScriptRecognition() {
         }
 
         try {
+            console.log('[POPUP DEBUG] Sending startSpeechRecognition to tab', tab.id);
             const result = await chrome.tabs.sendMessage(tab.id, {
                 type: 'startSpeechRecognition'
             });
+            console.log('[POPUP DEBUG] Content script response:', result);
+
             if (result && result.success) {
                 return true;
             } else if (result && result.error) {
                 handleSpeechError(result.error);
                 return false;
             }
+            return result !== undefined;
         } catch (error) {
+            console.warn('[POPUP DEBUG] sendMessage failed:', error.message);
             if (error.message && error.message.includes('Could not establish connection')) {
                 try {
+                    console.log('[POPUP DEBUG] Injecting content script and retrying');
                     await chrome.scripting.executeScript({
                         target: { tabId: tab.id },
                         files: ['scripts/content.js']
                     });
-                    await new Promise(resolve => setTimeout(resolve, 300));
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
                     const retryResult = await chrome.tabs.sendMessage(tab.id, {
                         type: 'startSpeechRecognition'
                     });
-                    return retryResult && retryResult.success;
+                    console.log('[POPUP DEBUG] Retry response:', retryResult);
+
+                    if (retryResult && retryResult.success) {
+                        return true;
+                    } else if (retryResult && retryResult.error) {
+                        handleSpeechError(retryResult.error);
+                        return false;
+                    }
+                    return retryResult !== undefined;
                 } catch (injectError) {
+                    console.error('[POPUP DEBUG] Injection failed:', injectError);
                     document.getElementById('response').textContent =
                         '⚠️ Could not start voice recognition on this page.\n\n' +
-                        'Try refreshing the page or navigating to a different website.';
+                        'Error: ' + injectError.message + '\n\n' +
+                        '💡 Try:\n' +
+                        '1. Refresh the page\n' +
+                        '2. Navigate to a different website\n' +
+                        '3. Check browser console (F12) for errors';
                     document.getElementById('responseBox').style.display = 'block';
                     return false;
                 }
             } else {
-                throw error;
+                console.error('[POPUP DEBUG] Error:', error);
+                document.getElementById('response').textContent =
+                    '⚠️ Could not start voice recognition.\n\n' +
+                    'Error: ' + (error.message || String(error)) + '\n\n' +
+                    '💡 Check:\n' +
+                    '1. Microphone permission in Chrome Settings\n' +
+                    '2. Browser console (F12) for details\n' +
+                    '3. Try refreshing the page';
+                document.getElementById('responseBox').style.display = 'block';
+                return false;
             }
         }
     } catch (error) {
+        console.error('[POPUP DEBUG] tryContentScriptRecognition error:', error);
         return false;
     }
 }
 
 function handleSpeechResult(transcript) {
-    console.log('[POPUP DEBUG] Speech result received:', transcript);
+    console.log('[POPUP DEBUG] handleSpeechResult, transcript:', transcript);
     document.getElementById('transcript').textContent = transcript;
     document.getElementById('transcriptBox').style.display = 'block';
     document.getElementById('response').textContent = transcript + '\n\nProcessing...';
@@ -513,28 +616,35 @@ function handleSpeechResult(transcript) {
     }
 
     const fallback = typeof fallbackParse === 'function' ? fallbackParse(transcript) : { action: 'UNKNOWN' };
+    console.log('[POPUP DEBUG] Fallback parse result:', fallback);
+
     if (fallback && fallback.action === 'READ_PAGE') {
+        console.log('[POPUP DEBUG] READ_PAGE from fallback, sending EXECUTE_COMMAND:', fallback);
         chrome.runtime.sendMessage({ type: 'EXECUTE_COMMAND', command: fallback }, (execResponse) => {
+            console.log('[POPUP DEBUG] EXECUTE_COMMAND response (READ_PAGE path):', execResponse);
+            if (chrome.runtime.lastError) console.error('[POPUP DEBUG] lastError:', chrome.runtime.lastError);
             finishListening();
             applyExecutionResponse(execResponse);
         });
         return;
     }
 
+    console.log('[POPUP DEBUG] Sending AI_PARSE_COMMAND');
     chrome.runtime.sendMessage({ type: 'AI_PARSE_COMMAND', text: transcript }, (response) => {
         console.log('[POPUP DEBUG] AI parse response:', response);
+        if (chrome.runtime.lastError) console.error('[POPUP DEBUG] AI_PARSE lastError:', chrome.runtime.lastError);
         if (chrome.runtime.lastError || !response || !response.command) {
             console.log('[POPUP DEBUG] Using fallback command:', fallback);
             chrome.runtime.sendMessage({ type: 'EXECUTE_COMMAND', command: fallback }, (execResponse) => {
-                console.log('[POPUP DEBUG] Fallback execution response:', execResponse);
+                console.log('[POPUP DEBUG] EXECUTE_COMMAND response (fallback):', execResponse);
                 finishListening();
                 applyExecutionResponse(execResponse);
             });
             return;
         }
-        console.log('[POPUP DEBUG] Using AI command:', response.command);
+        console.log('[POPUP DEBUG] Executing command:', response.command);
         chrome.runtime.sendMessage({ type: 'EXECUTE_COMMAND', command: response.command }, (execResponse) => {
-            console.log('[POPUP DEBUG] AI execution response:', execResponse);
+            console.log('[POPUP DEBUG] EXECUTE_COMMAND response:', execResponse);
             finishListening();
             applyExecutionResponse(execResponse);
         });
