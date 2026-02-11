@@ -263,26 +263,20 @@ function fallbackParse(text) {
             return { action: "SEARCH", query: searchMatch[1].trim() };
         }
     }
-    if (
-        t.includes("increase target size") ||
-        t.includes("larger click target") ||
-        t.includes("larger targets") ||
-        t.includes("bigger buttons") ||
-        t.includes("bigger text") ||
-        t.includes("increase button size") ||
-        t.includes("zoom in")
-    ) {
+    const wantsLargerTargets =
+        /increase\s+(the\s+)?(target|targets|button|buttons|click target)\s*size/.test(t) ||
+        /(?:larger|bigger)\s+(?:click\s+)?(?:target|targets|button|buttons|text)/.test(t) ||
+        /(?:target|targets|button|buttons|text)\s+(?:larger|bigger)/.test(t) ||
+        /zoom\s+in/.test(t);
+    if (wantsLargerTargets) {
         return { action: "INCREASE_TARGET_SIZE" };
     }
-    if (
-        t.includes("decrease target size") ||
-        t.includes("smaller click target") ||
-        t.includes("smaller targets") ||
-        t.includes("smaller buttons") ||
-        t.includes("decrease button size") ||
-        t.includes("reduce button size") ||
-        t.includes("zoom out")
-    ) {
+    const wantsSmallerTargets =
+        /(?:decrease|reduce)\s+(the\s+)?(target|targets|button|buttons|click target)\s*size/.test(t) ||
+        /smaller\s+(?:click\s+)?(?:target|targets|button|buttons|text)/.test(t) ||
+        /(?:target|targets|button|buttons|text)\s+smaller/.test(t) ||
+        /zoom\s+out/.test(t);
+    if (wantsSmallerTargets) {
         return { action: "DECREASE_TARGET_SIZE" };
     }
     if (t.includes("larger") && (t.includes("target") || t.includes("button"))) {
